@@ -1,0 +1,4 @@
+data_pre_processing:
+  clip_length: 16
+  resize: [112,112]
+  precision: float32
