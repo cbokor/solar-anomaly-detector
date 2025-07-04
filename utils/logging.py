@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import torch
 from datetime import datetime
 from torch.utils.tensorboard.writer import SummaryWriter
 
@@ -28,9 +29,14 @@ def setup_logging_dir(config_path, root_dir="runs", exp_name=None):
     shutil.copy(config_path, os.path.join(log_dir, "config.yaml"))
 
     # Initialize TensorBoard writer
-    writer = SummaryWriter(log_dir=log_dir)
+    writer = SummaryWriter(log_dir=os.path.join(log_dir, "logs"))
 
     return log_dir, writer
+
+
+def save_checkpoint(state, path):
+    """Save specifed 'state' package to designated path."""
+    torch.save(state, path)
 
 
 def config_template():
