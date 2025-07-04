@@ -8,8 +8,7 @@
 # - Save to compact model-friendly files ready for training with PyTorch!
 
 # -> next steps must be done elsewhere:
-# + turn file into ImageFolder
-# + turn ImageFolder into DataLoader
+# + turn clips into batches and thus a DataLoader (proabably in train.py via a custom Dataset class)
 
 # %% Imports
 
