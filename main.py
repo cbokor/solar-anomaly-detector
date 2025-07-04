@@ -66,18 +66,21 @@ def parse_args():
         default=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         help="Device to use for training (default: cuda if available, else cpu)",
     )
-    # do these two make sense without a backbone? maintain for now
-    parser.add_argument(
-        "--pretrain",
-        default=True,
-        type=bool,
-        help="pretrain model from own data before loading from checkpoint",
-    )
     parser.add_argument(
         "--preload",
         default=False,
         type=bool,
-        help="preload previously trained model (default: False)",
+        help="load previously trained model from config specified checkpoint (default: False).",
+    )
+    parser.add_argument(
+        "--checkpoint_dir",
+        default=None,
+        type=str,
+        help=(
+            "Dir of desired checkpoint file within 'runs//' to load (default: None)."
+            "Follow format: 'exp-name\\%Y-%m-%d_%H-%M-%S\\checkpoints\\checkpoint_epoch_epoch_counter.pth.tar'"
+            "Or for best_model: 'exp-name\\%Y-%m-%d_%H-%M-%S\\best_model\\best_model_epoch_epoch_counter.pth.tar'"
+        ),
     )
     return parser.parse_args()
 
