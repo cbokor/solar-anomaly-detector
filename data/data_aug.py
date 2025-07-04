@@ -43,7 +43,11 @@ class ClipDataSet(Dataset):
         Load a clip by index, apply transformations if any.
         """
         clip_path = os.path.join(self.clip_dir, self.clip_files[idx])
-        clip = torch.load(clip_path)
+
+        # Security risk raised for torch.load(), specifically malicous unpickling, weights_only=True set to match future default (03/07/2025)
+        # See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details
+        clip = torch.load(clip_path, weights_only=True)
+
         if self.transform:
             clip = self.transform(clip)
         return clip
