@@ -2,6 +2,7 @@ data_pre_processing:
   clip_length: 16
   resize: [112,112]
   precision: "float32"
+  stride: 1
 
 data_loader:
   batch_size: 8   # try 2 if AMP active
@@ -13,15 +14,14 @@ optimizer:
   weight_decay: 1e-5
 
 model:
-  model_arch: "Basic3DAE"
+  model_arch: "PaperConv3DAE"
   loss_function: "MSELoss"
   #loss_params:
   #  example: 0.01
 
 training:
-  amp: True  # include autoMixedPrecision (default: False)
-  start_epoch: 0
-  epochs: 50
-  warmup_epochs: 10
-  log_interval:
-  checkpoint_interval:
+  amp: False  # include autoMixedPrecision (default: False)
+  start_epoch: 0  # Initial epoch, changed if checkpoint loaded (default: 0)
+  epochs: 50  # Total number of epochs for training (default: 50)
+  warmup_epochs: 10 # No of epochs where lr is held constant (default: 10)
+  checkpoint_interval: 5 # checkpoint saved every {value} epochs (default: 5)

@@ -182,6 +182,8 @@ def prepare_solar_data(tar_dir, out_dir, config):
     clip_len = config["data_pre_processing"]["clip_length"]
     resize = tuple(config["data_pre_processing"]["resize"])
     precision = config["data_pre_processing"]["precision"]
+    # if stride=clip_len, then fully sequential clips, ideally stride=1,2,or4 for sliding window
+    stride = config["data_pre_processing"]["stride"]
 
     os.makedirs(out_dir, exist_ok=True)  # Ensure output directory exists
 
@@ -252,7 +254,6 @@ def prepare_solar_data(tar_dir, out_dir, config):
             frames
         )  # Stack frames into a numpy array (shape: [num_frames, height, width, channels])
 
-        stride = 1  # if stride=clip_len, then fully sequential clips, ideally stride=1,2,or4 for sliding window
         # Create clips of specified length
         clips = [
             frames[i : i + clip_len]
