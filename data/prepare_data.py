@@ -251,10 +251,12 @@ def prepare_solar_data(tar_dir, out_dir, config):
         frames = np.stack(
             frames
         )  # Stack frames into a numpy array (shape: [num_frames, height, width, channels])
+
+        stride = 1  # if stride=clip_len, then fully sequential clips, ideally stride=1,2,or4 for sliding window
         # Create clips of specified length
         clips = [
             frames[i : i + clip_len]
-            for i in range(0, len(frames) - clip_len + 1, clip_len)
+            for i in range(0, len(frames) - clip_len + 1, stride)
         ]
 
         for i, clip in tqdm(
