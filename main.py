@@ -14,6 +14,7 @@ import sys
 
 from data.prepare_data import prepare_solar_data
 from training.train import train_model
+from data.review_processed_data import review_processed_data
 
 # from inference.evaluate import evaluate_model
 
@@ -32,7 +33,7 @@ def parse_args():
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["prep", "train", "eval"],
+        choices=["prep", "review", "train", "eval"],
         required=True,
         help="set mode to evaluate or train model",
     )
@@ -70,7 +71,7 @@ def parse_args():
         "--preload",
         default=False,
         type=bool,
-        help="load previously trained model from config specified checkpoint (default: False).",
+        help="Load previously trained model from config specified checkpoint (default: False).",
     )
     parser.add_argument(
         "--checkpoint_dir",
@@ -81,6 +82,12 @@ def parse_args():
             "Follow format: 'exp-name\\%Y-%m-%d_%H-%M-%S\\checkpoints\\checkpoint_epoch_epoch_counter.pth.tar'"
             "Or for best_model: 'exp-name\\%Y-%m-%d_%H-%M-%S\\best_model\\best_model_epoch_epoch_counter.pth.tar'"
         ),
+    )
+    parser.add_argument(
+        "--save-csv",
+        default=False,
+        type=bool,
+        help="Save a .csv file of processed clip stats during 'review' mode.",
     )
     return parser.parse_args()
 
@@ -100,18 +107,19 @@ def main():
         args.gpu_index = -1
 
     with open(args.config, "r") as f:
-        config = yaml.safe_load(f)  # load config file into local var
+        config = yaml.safe_load(f)  # load config file into local var as hierarchal dict
 
     # Check mode and proceed accordingly
     if args.mode == "prep":
         prepare_solar_data(args.data_raw, args.data, config)
         print("[INFO] Data preparation complete.")
+    elif args.mode == "review":
+        review_processed_data()
     elif args.mode == "train":
         train_model(args, config)
+        print("[INFO] Training complete & best_model selected.")
     # elif args.mode == "eval":
     #    evaluate_model(config)
-
-    pass
 
 
 # %% Script
@@ -122,7 +130,7 @@ if __name__ == "__main__":
     sys.argv = [
         "main.py",
         "--mode",
-        "train",
+        "review",
         "--config",
         "config.yaml",
     ]  # override args for testing/debugging
