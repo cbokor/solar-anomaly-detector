@@ -66,7 +66,7 @@ def review_processed_data(save_stats=False):
     # Threshold:
     # 95% rule: assuming Normal dist, 95% data falls within mean +- 2 std, upper 2.5% = anomaly.
     # options -> 1.645*std~90%; 1.44*std~85%, 1.28*std~80%, 1.15*std~75%, 1*std~68%
-    cdf_z = 1.645
+    cdf_z = 2
     mean_thresh = (
         data_frame["overall_mean"].mean() + cdf_z * data_frame["overall_mean"].std()
     )

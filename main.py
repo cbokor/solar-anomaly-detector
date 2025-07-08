@@ -111,7 +111,7 @@ def main():
 
     # Check mode and proceed accordingly
     if args.mode == "prep":
-        prepare_solar_data(args.data_raw, args.data, config)
+        prepare_solar_data(args.data_raw, args.data_clips, config)
         print("[INFO] Data preparation complete.")
     elif args.mode == "review":
         review_processed_data()

@@ -29,7 +29,7 @@ from tqdm import tqdm
 # - currently wasting anything not divisible by clip_len (default 16),
 
 
-def extract_tar_to_temp(tar_path, allowed_ext=None):
+def extract_tar_to_temp(temp_path, tar_path, allowed_ext=None):
     """
     Extracts all files from a tar archive to a temporary directory.
     Args:
@@ -42,7 +42,7 @@ def extract_tar_to_temp(tar_path, allowed_ext=None):
         temp_obj (TemporaryDirectory): Temporary directory object containing the extracted files.
 
     """
-    temp_obj = TemporaryDirectory()  # Create a temporary directory object
+    temp_obj = TemporaryDirectory(dir=temp_path)  # Create a temporary directory object
     temp_dir = temp_obj.name  # Get the name of the temporary directory
 
     with tarfile.open(
@@ -175,7 +175,7 @@ def process_fits_image(fits_path, resize=(112, 112), precision="float32"):
 
 def prepare_solar_data(tar_dir, out_dir, config):
     """
-    Prepares 304A solar data for training by processing .fits files stored in .tar files.
+    Prepares solar data for training by processing .fits files stored in .tar files or the specified dir.
     """
 
     # Import all local config variables
@@ -186,44 +186,65 @@ def prepare_solar_data(tar_dir, out_dir, config):
     stride = config["data_pre_processing"]["stride"]
 
     os.makedirs(out_dir, exist_ok=True)  # Ensure output directory exists
+    all_fits_files = []
 
-    # Cycle through all .tar files in given dir
-    for tar_name in tqdm(
+    # Cycle through all .tar and .fits files in given dir
+    for entry in tqdm(
         sorted(os.listdir(tar_dir)),
-        desc="[INFO] Processing Archives",
-        unit="archive",
+        desc="[INFO] Processing .tar Archives & .fits Files",
+        unit="archive/file",
         position=0,  # pin outer bar to the bottom
         leave=True,  # leave it on screen after finishing
     ):
 
-        if not tar_name.endswith(".tar"):  # skip if not a .tar file
-            tqdm.write(f"\n[INFO] Skipping non-tar file: {tar_name}")
+        entry_path = os.path.join(tar_dir, entry)
+
+        if entry.endswith(".tar"):
+            tqdm.write(f"\n[INFO] Processing Archive: {entry}")
+            # Extract all .fits files from the tar archive to a temporary directory
+            # Note: temp_obj will be deleted automatically when it goes out of scope
+            # but can be manually cleaned up to ensure no temp files are left
+            fits_files, temp_obj = extract_tar_to_temp(
+                out_dir, entry_path, allowed_ext=[".fits"]
+            )
+            if not fits_files:
+                tqdm.write(
+                    f"    [WARNING] No .fits files found in {entry}. Skipping..."
+                )
+                continue
+            all_fits_files.append(
+                (fits_files, temp_obj)
+            )  # keep temp_obj for cleanup later
+
+        elif entry.endswith(".fits"):
+            all_fits_files.append((entry_path, None))  # single file, no temp_obj
+
+        else:  # skip if not a .tar or .fits
+            tqdm.write(f"\n[INFO] Skipping unsupported file: {entry}")
             continue
 
-        tqdm.write(f"\n[INFO] Processing Archive: {tar_name}")
-        tar_path = os.path.join(tar_dir, tar_name)
+    if not all_fits_files:
+        print("[ERROR] No .fits files found in directory or tar archives")
+        return
 
-        # Extract all .fits files from the tar archive to a temporary directory
-        # Note: temp_obj will be deleted automatically when it goes out of scope
-        # but can be manually cleaned up to ensure no temp files are left
+    # Process and assemble all frames
 
-        fits_files, temp_obj = extract_tar_to_temp(tar_path, allowed_ext=[".fits"])
+    frames = []
+    for fits_list, _ in tqdm(
+        all_fits_files,
+        desc="[INFO] Assembling all frames",
+        unit="frame_packs",
+        position=0,
+        leave=False,
+    ):
 
-        if not fits_files:
-            tqdm.write(f"    [WARNING] No .fits files found in {tar_name}. Skipping...")
-            continue
-
-        frames = []
         for fits_file in tqdm(
-            fits_files,
-            desc=f"[INFO] Pre-processing frames",
+            fits_list,
+            desc=f"[INFO] Pre-processing .fits files from archive",
             unit="file",
             position=1,  # place above outer bar
             leave=False,  # do not leave this bar on screen after finishing
         ):
-
-            # Process each .fits file (e.g., read, resize, normalize)
-            # Append processed frames to the frames list
 
             try:
                 frame = process_fits_image(
@@ -234,60 +255,72 @@ def prepare_solar_data(tar_dir, out_dir, config):
                 tqdm.write(f"   [ERROR] Failed to process {fits_file}: {e}")
                 continue
 
-        if len(frames) < clip_len:
-            tqdm.write(
-                f"  [WARNING] Not enough frames in {tar_name} for a full clip of length {clip_len}. Skipping..."
-            )
-            continue
+    if len(frames) < clip_len:
+        tqdm.write(
+            f"  [WARNING] Not enough frames in {frames} for a full clip of length {clip_len}. Skipping..."
+        )
+        return
 
-        if len(frames) % clip_len != 0:
-            tqdm.write(
-                f"  [WARNING] Number of frames in {tar_name} is not divisible by clip length {clip_len}. "
-            )
-            tqdm.write(
-                f"  Truncating to the nearest multiple: ({len(frames) - (len(frames) - (len(frames) % clip_len))}) frames were lost)."
-            )
+    if len(frames) % clip_len != 0:
 
-            frames = frames[: len(frames) - (len(frames) % clip_len)]
+        lost = len(frames) % clip_len
+        tqdm.write(
+            f"  [WARNING] Number of total frames is not divisible by clip length {clip_len}. "
+        )
+        tqdm.write(f"  Truncating to the nearest multiple: ({lost}) frames were lost).")
 
-        frames = np.stack(
-            frames
-        )  # Stack frames into a numpy array (shape: [num_frames, height, width, channels])
+        frames = frames[: len(frames) - lost]
 
-        # Create clips of specified length
-        clips = [
-            frames[i : i + clip_len]
-            for i in range(0, len(frames) - clip_len + 1, stride)
-        ]
+    frames = np.stack(
+        frames
+    )  # Stack frames into a numpy array (shape: [num_frames, height, width, channels])
 
-        for i, clip in tqdm(
-            enumerate(clips),
-            desc=f"[INFO] Saving clips:",
-            unit="clip",
-        ):
+    # check for accepted precision types
+    if precision == "uint8":
+        data_type = torch.uint8
+    elif precision == "float32":
+        data_type = torch.float32
+    else:
+        raise ValueError("Unsupported precision type. Use 'uint8' or 'float32'.")
 
-            # check for accepted precision types
-            if precision == "uint8":
-                data_type = torch.uint8
-            elif precision == "float32":
-                data_type = torch.float32
-            else:
-                raise ValueError(
-                    "Unsupported precision type. Use 'uint8' or 'float32'."
-                )
+    # Create one full movie tensor of data for later evaluation
+    movie_tensor = torch.tensor(frames, dtype=data_type).unsqueeze(
+        1
+    )  # (T, H, W) -> (T, C=1, H, W)
+    # convert to expected format for CNN's in Pyorch,
+    # forward compatable to support multi-channel input in the future (e.g., 171A & 304A)
+    movie_tensor = movie_tensor.permute(1, 0, 2, 3)  # -> (C=1, T, H, W)
+    movie_dir = os.path.join(out_dir, "full_movie")
+    os.makedirs(movie_dir, exist_ok=True)
+    out_name = "full_movie.pt"
+    out_path = os.path.join(movie_dir, out_name)
+    torch.save(movie_tensor, out_path)
 
-            # Convert to tensor and add channel dimension (assuming grey scale images)
-            clip_tensor = torch.tensor(clip, dtype=data_type).unsqueeze(
-                1
-            )  # (T, H, W) -> (T, C=1, H, W)
+    # Create clips of specified length for training + validation
+    clips = [
+        frames[i : i + clip_len] for i in range(0, len(frames) - clip_len + 1, stride)
+    ]
 
-            # convert to expected format for CNN's in Pyorch,
-            # forward compatable to support multi-channel input in the future (e.g., 171A & 304A)
-            clip_tensor = clip_tensor.permute(1, 0, 2, 3)  # -> (C=1, T, H, W)
+    for i, clip in tqdm(
+        enumerate(clips),
+        desc=f"[INFO] Saving clips:",
+        unit="clip",
+    ):
 
-            out_name = f"{tar_name.replace('.tar', '')}_clip_{i:04d}.pt"
-            out_path = os.path.join(out_dir, out_name)
-            torch.save(clip_tensor, out_path)
+        # Convert to tensor and add channel dimension (assuming grey scale images)
+        clip_tensor = torch.tensor(clip, dtype=data_type).unsqueeze(
+            1
+        )  # (T, H, W) -> (T, C=1, H, W)
 
-        # Clean up temporary directory
-        temp_obj.cleanup()
+        # convert to expected format for CNN's in Pyorch,
+        # forward compatable to support multi-channel input in the future (e.g., 171A & 304A)
+        clip_tensor = clip_tensor.permute(1, 0, 2, 3)  # -> (C=1, T, H, W)
+
+        out_name = f"clip_{i:04d}.pt"
+        out_path = os.path.join(out_dir, out_name)
+        torch.save(clip_tensor, out_path)
+
+    # Clean up all temporary directories
+    for _, temp_obj in all_fits_files:
+        if temp_obj is not None:
+            temp_obj.cleanup()
