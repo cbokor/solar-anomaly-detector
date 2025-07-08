@@ -84,8 +84,8 @@ def parse_args():
         ),
     )
     parser.add_argument(
-        "--save-csv",
-        default=False,
+        "--save-clip-stats",
+        default=True,
         type=bool,
         help="Save a .csv file of processed clip stats during 'review' mode.",
     )
@@ -114,7 +114,7 @@ def main():
         prepare_solar_data(args.data_raw, args.data_clips, config)
         print("[INFO] Data preparation complete.")
     elif args.mode == "review":
-        review_processed_data()
+        review_processed_data(args.data_clips, save_stats=args.save_clip_stats)
     elif args.mode == "train":
         train_model(args, config)
         print("[INFO] Training complete & best_model selected.")

@@ -11,7 +11,7 @@ import matplotlib.animation as animation
 # %% Methods
 
 
-def review_processed_data(save_stats=False):
+def review_processed_data(root_dir, save_stats=False):
     """Global script for full review pipeline
     - generate stats
     - plot stats
@@ -22,10 +22,10 @@ def review_processed_data(save_stats=False):
 
     # Initialize var's
     root_dir = "data//processed"
-    anomaly_dir = "data//processed//anomalies"
+    anomaly_dir = os.path.join(root_dir, "anomalies")
     os.makedirs(anomaly_dir, exist_ok=True)
     if save_stats:
-        stats_csv = "//data//processed_clip_stats.csv"
+        stats_csv = os.path.join(root_dir, "stats")
     else:
         stats_csv = None
 
@@ -233,6 +233,10 @@ def eval_all_clips_in_folder(root_dir, stats_output_path=None):
                     print(f"[ERROR] Failed in {clip_path}: {e}")
 
     if stats_output_path:
+
+        os.makedirs(stats_output_path, exist_ok=True)
+        stats_output_path = os.path.join(stats_output_path, "all_clips_stats.csv")
+
         import csv  # read/write csv's
 
         keys = (
