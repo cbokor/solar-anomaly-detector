@@ -214,23 +214,17 @@ def eval_all_clips_in_folder(root_dir, stats_output_path=None):
 
     all_stats = []
 
-    # os.walk() outputs (recursively generates) several tuples for each dir within root_dir of form:
-    # (current path, dir-names in current path: list, filenames in current path: list).
-    # we ignor dir names via '_'
-    for dirpath, _, filenames in os.walk(root_dir):
-        for fname in filenames:
-            if fname.endswith(".pt"):
-                clip_path = os.path.join(dirpath, fname)
-                try:
-                    # load specified file and perform operations
-                    clip = torch.load(clip_path, map_location="cpu", weights_only=True)
-                    stats = eval_clip_stats(clip)
-                    stats["clip_path"] = os.path.relpath(clip_path, root_dir)
+    for fname in os.listdir(root_dir):
+        clip_path = os.path.join(root_dir, fname)
+        if os.path.isfile(clip_path) and fname.endswith(".pt"):
+            try:
+                clip = torch.load(clip_path, map_location="cpu", weights_only=True)
+                stats = eval_clip_stats(clip)
+                stats["clip_path"] = fname  # or use os.path.relpath if needed
 
-                    # append stats dict to global list
-                    all_stats.append(stats)
-                except Exception as e:
-                    print(f"[ERROR] Failed in {clip_path}: {e}")
+                all_stats.append(stats)
+            except Exception as e:
+                print(f"[ERROR] Failed in {clip_path}: {e}")
 
     if stats_output_path:
 
