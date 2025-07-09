@@ -230,7 +230,7 @@ def prepare_solar_data(tar_dir, out_dir, config):
     # Process and assemble all frames
 
     frames = []
-    for fits_list, _ in tqdm(
+    for entry_name, fits_list in tqdm(
         all_fits_files,
         desc="[INFO] Assembling all frames",
         unit="frame_packs",
@@ -238,22 +238,32 @@ def prepare_solar_data(tar_dir, out_dir, config):
         leave=False,
     ):
 
-        for fits_file in tqdm(
-            fits_list,
-            desc=f"[INFO] Pre-processing .fits files from archive",
-            unit="file",
-            position=1,  # place above outer bar
-            leave=False,  # do not leave this bar on screen after finishing
-        ):
-
+        if not fits_list:
             try:
                 frame = process_fits_image(
-                    fits_file, resize=resize, precision=precision
+                    entry_name, resize=resize, precision=precision
                 )
                 frames.append(frame)
             except Exception as e:
-                tqdm.write(f"   [ERROR] Failed to process {fits_file}: {e}")
+                tqdm.write(f"   [ERROR] Failed to process {entry_name}: {e}")
                 continue
+        else:
+            for fits_file in tqdm(
+                fits_list,
+                desc=f"[INFO] Pre-processing .fits files from archive",
+                unit="file",
+                position=1,  # place above outer bar
+                leave=False,  # do not leave this bar on screen after finishing
+            ):
+
+                try:
+                    frame = process_fits_image(
+                        fits_file, resize=resize, precision=precision
+                    )
+                    frames.append(frame)
+                except Exception as e:
+                    tqdm.write(f"   [ERROR] Failed to process {fits_file}: {e}")
+                    continue
 
     if len(frames) < clip_len:
         tqdm.write(
