@@ -288,12 +288,14 @@ def prepare_solar_data(tar_dir, out_dir, config):
     )  # Stack frames into a numpy array (shape: [num_frames, height, width, channels])
 
     # check for accepted precision types
-    if precision == "uint8":
-        data_type = torch.uint8
+    if precision == "float16":
+        data_type = torch.float16
     elif precision == "float32":
         data_type = torch.float32
     else:
-        raise ValueError("Unsupported precision type. Use 'uint8' or 'float32'.")
+        raise ValueError(
+            "Unsupported precision type for training. Use 'float16' or 'float32'."
+        )
 
     # Create one full movie tensor of data for later evaluation
     movie_tensor = torch.tensor(frames, dtype=data_type).unsqueeze(
