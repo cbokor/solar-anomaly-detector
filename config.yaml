@@ -1,7 +1,7 @@
 data_pre_processing:
   clip_length: 16
   resize: [112,112]
-  precision: "float32"
+  precision: "float32" # float32 or float16, no others supported
   stride: 1
 
 data_loader:

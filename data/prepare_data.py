@@ -157,15 +157,17 @@ def process_fits_image(fits_path, resize=(112, 112), precision="float32"):
         np.max(img) - np.min(img) + 1e-8
     )  # Normalize to [0,1] range (avoiding division by zero)
 
-    if precision == "uint8":
-        # Convert to Lower precision PIL Image and resize (8-bit format, [0,255])
-        img = Image.fromarray((img * 255).astype(np.uint8)).resize(resize)
+    if precision == "float16":
+        # Convert to Lower precision PIL Image and resize (16-bit format, [0,1])
+        img = Image.fromarray(img.astype(np.float16)).resize(resize)
 
     elif precision == "float32":
         # Convert to Higher Precision PIL Image and resize (32-bit float format, [0,1])
         img = Image.fromarray(img.astype(np.float32)).resize(resize)
     else:
-        raise ValueError("Unsupported precision type. Use 'uint8' or 'float32'.")
+        raise ValueError(
+            "Unsupported precision type for training. Use 'float16' or 'float32'."
+        )
 
     return np.array(img)  # Return as specified precision numpy array
 
@@ -300,7 +302,7 @@ def prepare_solar_data(tar_dir, out_dir, config):
     # convert to expected format for CNN's in Pyorch,
     # forward compatable to support multi-channel input in the future (e.g., 171A & 304A)
     movie_tensor = movie_tensor.permute(1, 0, 2, 3)  # -> (C=1, T, H, W)
-    movie_dir = os.path.join(out_dir, "full_movie")
+    movie_dir = os.path.join(out_dir, "full_movie_train")
     os.makedirs(movie_dir, exist_ok=True)
     out_name = "full_movie.pt"
     out_path = os.path.join(movie_dir, out_name)
