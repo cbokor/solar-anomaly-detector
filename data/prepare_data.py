@@ -16,17 +16,42 @@ import os
 import tarfile
 import numpy as np
 import torch
+import re
 from PIL import Image
 from astropy.io import fits
 from tempfile import TemporaryDirectory
 from tqdm import tqdm
+from datetime import datetime
 
 
 # %% Methods (data agnostic)
 
 # Notes for development:
 # - print & tqdm.write commands currently placeholders for creating a logger
-# - currently wasting anything not divisible by clip_len (default 16),
+# - change dir for temp files to be the location of the raw data, that way not taking room in repo processed folder
+
+
+def fname_to_datetime(fname):
+    """
+    Extracts timestamp from AIA FITS filenames.
+    Supports formats like:
+    - aia.lev1.171A_2012_04_10T00_05_01.35Z.image_lev1.fits
+    - jsoc-aia.lev1.304A_2023-11-01T00-00-05.13Z.image_lev1.fits
+    """
+
+    basename = os.path.basename(fname)
+
+    # Try old format: 2012_04_10T00_05_01
+    match_old = re.search(r"(\d{4}_\d{2}_\d{2}T\d{2}_\d{2}_\d{2})", basename)
+    if match_old:
+        return datetime.strptime(match_old.group(1), "%Y_%m_%dT%H_%M_%S")
+
+    # Try new format: 2023-11-01T00-00-05
+    match_new = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})", basename)
+    if match_new:
+        return datetime.strptime(match_new.group(1), "%Y-%m-%dT%H-%M-%S")
+
+    raise ValueError(f"Could not extract timestamp from filename: {basename}")
 
 
 def extract_tar_to_temp(temp_path, tar_path, allowed_ext=None):
@@ -189,6 +214,8 @@ def prepare_solar_data(tar_dir, out_dir, config):
 
     os.makedirs(out_dir, exist_ok=True)  # Ensure output directory exists
     all_fits_files = []
+    gapped_dir = os.path.join(out_dir, "gapped_clips")
+    os.makedirs(gapped_dir, exist_ok=True)
 
     # Cycle through all .tar and .fits files in given dir
     for entry in tqdm(
@@ -232,7 +259,7 @@ def prepare_solar_data(tar_dir, out_dir, config):
     # Process and assemble all frames
 
     frames = []
-    for entry_name, fits_list in tqdm(
+    for fits_list, temp_obj in tqdm(
         all_fits_files,
         desc="[INFO] Assembling all frames",
         unit="frame_packs",
@@ -240,14 +267,15 @@ def prepare_solar_data(tar_dir, out_dir, config):
         leave=False,
     ):
 
-        if not fits_list:
+        if isinstance(fits_list, str):
             try:
                 frame = process_fits_image(
-                    entry_name, resize=resize, precision=precision
+                    fits_list, resize=resize, precision=precision
                 )
-                frames.append(frame)
+                timestamp = fname_to_datetime(fits_list)
+                frames.append((timestamp, frame))
             except Exception as e:
-                tqdm.write(f"   [ERROR] Failed to process {entry_name}: {e}")
+                tqdm.write(f"   [ERROR] Failed to process {fits_list}: {e}")
                 continue
         else:
             for fits_file in tqdm(
@@ -262,7 +290,8 @@ def prepare_solar_data(tar_dir, out_dir, config):
                     frame = process_fits_image(
                         fits_file, resize=resize, precision=precision
                     )
-                    frames.append(frame)
+                    timestamp = fname_to_datetime(fits_file)
+                    frames.append((timestamp, frame))
                 except Exception as e:
                     tqdm.write(f"   [ERROR] Failed to process {fits_file}: {e}")
                     continue
@@ -283,8 +312,22 @@ def prepare_solar_data(tar_dir, out_dir, config):
 
         frames = frames[: len(frames) - lost]
 
+    # sort by timestamp
+    frames.sort(key=lambda x: x[0])
+    timestamps = [t for t, _ in frames]
+    cadence_sec = config["data_pre_processing"]["sample_interval_sec"]
+    gap_threshhold = config["data_pre_processing"]["gap_threshhold"]
+
+    # flag gaps > gap_threshhold x cadence
+    gap_flags = [False] * len(timestamps)
+    for i in range(1, len(timestamps)):
+        if (
+            timestamps[i] - timestamps[i - 1]
+        ).total_seconds() > gap_threshhold * cadence_sec:
+            gap_flags[i] = True  # mark first frame **after** a gap
+
     frames = np.stack(
-        frames
+        [f[1] for f in frames]
     )  # Stack frames into a numpy array (shape: [num_frames, height, width, channels])
 
     # check for accepted precision types
@@ -311,15 +354,22 @@ def prepare_solar_data(tar_dir, out_dir, config):
     torch.save(movie_tensor, out_path)
 
     # Create clips of specified length for training + validation
-    clips = [
-        frames[i : i + clip_len] for i in range(0, len(frames) - clip_len + 1, stride)
-    ]
+    # clips = [
+    #     frames[i : i + clip_len] for i in range(0, len(frames) - clip_len + 1, stride)
+    # ]
 
-    for i, clip in tqdm(
-        enumerate(clips),
+    for i, start in tqdm(
+        enumerate(range(0, len(frames) - clip_len + 1, stride)),
         desc=f"[INFO] Saving clips:",
         unit="clip",
     ):
+        end = start + clip_len
+        clip = frames[start:end]
+
+        # if any gap flag inside this clip is True → send to gapped_dir
+        has_gap = any(
+            gap_flags[start + 1 : end]
+        )  # +1 so a gap marks the *start* of missing interval
 
         # Convert to tensor and add channel dimension (assuming grey scale images)
         clip_tensor = torch.tensor(clip, dtype=data_type).unsqueeze(
@@ -330,8 +380,9 @@ def prepare_solar_data(tar_dir, out_dir, config):
         # forward compatable to support multi-channel input in the future (e.g., 171A & 304A)
         clip_tensor = clip_tensor.permute(1, 0, 2, 3)  # -> (C=1, T, H, W)
 
+        subdir = gapped_dir if has_gap else out_dir
         out_name = f"clip_{i:04d}.pt"
-        out_path = os.path.join(out_dir, out_name)
+        out_path = os.path.join(subdir, out_name)
         torch.save(clip_tensor, out_path)
 
     # Clean up all temporary directories
