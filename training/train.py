@@ -43,8 +43,8 @@ def train_model(args, config):
     +
     """
 
-    print("Device:", args.device)
-    print("Number of workers assigned:", args.num_workers)
+    print("[INFO] Training with Device:", args.device)
+    print("[INFO] Number of workers assigned:", args.num_workers)
     # print("Total number of epochs:", args.epochs)
     # print("Number of warmup epochs:", args.warmup_epochs)
 
@@ -55,6 +55,11 @@ def train_model(args, config):
 
     # Organise data into DataLoader:
 
+    if args.workers > 0:
+        persistent_workers = True
+    else:
+        persistent_workers = False
+
     # train_data, test_data = torch.utils.data.random_split(train_data, [**, **])
     train_loader = DataLoader(
         train_data,
@@ -62,6 +67,8 @@ def train_model(args, config):
         drop_last=bool(config["data_loader"]["drop_last"]),
         num_workers=args.num_workers,
         shuffle=True,
+        pin_memory=True,
+        persistent_workers=persistent_workers,
         # sampler=sampler,
     )
 
@@ -74,7 +81,7 @@ def train_model(args, config):
     model = model_class()
 
     # Assign optimizer: default is 'Adam' with weight decay due to tiny dataset (Stable, fast, regularised for proof of concept)
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         float(config["optimizer"]["lr"]),
         weight_decay=float(config["optimizer"]["weight_decay"]),
@@ -82,7 +89,10 @@ def train_model(args, config):
 
     # Scheduler to dictate the learning rate with CosineAnnealingLR (i.e., learning rate annealed accros args.epochs)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=config["training"]["epochs"], eta_min=1e-6, last_epoch=-1
+        optimizer,
+        T_max=int(config["training"]["epochs"]),
+        eta_min=float(config["training"]["eta_min"]),
+        last_epoch=-1,
     )
 
     # Assign loss function: default is MSELoss (i.e., pixel-wise loss)
