@@ -69,7 +69,7 @@ class PaperConv3DAE(nn.Module):
     """
     A reconstructive 3D convolutional autoencoder to replicate the architecture from the paper
     “Detecting spatiotemporal irregularities in videos using 3D Convolutional Autoencoder”
-    (Yokoyama & Nakazawa, 2019, JVCIR) -> http://dx.doi.org/10.1016/j.jvcir.2019.102747 .
+    (Mengjia et al, 2019, JVCIR) -> http://dx.doi.org/10.1016/j.jvcir.2019.102747 .
 
     adv:
     - High capacity model for more complex spatiotemporal feature learning.
@@ -112,8 +112,13 @@ class PaperConv3DAE(nn.Module):
             nn.BatchNorm3d(256),
             nn.Tanh(),
         )
+        self.output_head = nn.Sequential(
+            nn.Conv3d(256, 1, kernel_size=3, stride=1, padding=1),
+            nn.Sigmoid(),  # Sigmoid to ensure output in range [0, 1] for pixel values (assume normalized input)
+        )
 
     def forward(self, x):
         z = self.encoder(x)  # latent space z
         decoded = self.decoder(z)  # reconstructed output
-        return decoded
+        out = self.output_head(decoded)  # project back to 1 channel
+        return out
