@@ -32,10 +32,10 @@ class AnomalyDetection:
 
     def __init__(self, model, optimizer, scheduler, criterion, config, device):
         """Instance input properties and initiate SummaryWriter"""
-        self.model = model
+        self.model = model.to(device, non_blocking=True)
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.criterion = criterion.to(device)
+        self.criterion = criterion
         self.config = config
         self.device = device
 
@@ -74,7 +74,7 @@ class AnomalyDetection:
 
         # Class to handle dynamic loss scaling
         use_amp = config["training"]["amp"] and self.device.type == "cuda"
-        scaler = GradScaler("cuda", enabled=use_amp)
+        scaler = GradScaler(enabled=use_amp)
 
         # Repeatedly cycle over data by specified epochs
 
@@ -89,12 +89,12 @@ class AnomalyDetection:
 
             for clips in loop:
 
-                clips = clips.to(self.device)
+                clips = clips.to(self.device, non_blocking=True)
 
                 # Context manager: enable/disable AMP, i.e., dynamicly apply float16 precision or normal float32
                 # Note: ignore pylance warning for `autocast, the docs havnt been updated to the depreciation
                 with torch.amp.autocast(
-                    self.device.type,
+                    device_type=self.device.type,
                     enabled=self.config["training"]["amp"],
                     dtype=torch.float16,
                 ):
@@ -103,7 +103,9 @@ class AnomalyDetection:
                         outputs, clips
                     )  # outputs PyTorch Tensor scalar: tesnor(float, device)
 
-                self.optimizer.zero_grad()  # zero out gradients to prevent accumulaion (PyTorch default is to accumulate)
+                self.optimizer.zero_grad(
+                    set_to_none=True
+                )  # zero out gradients to prevent accumulaion (PyTorch default is to accumulate)
 
                 # compute grads and scale to prevent vanishing grads/underflow in float16 (AMP)
                 scaler.scale(loss).backward()
@@ -111,7 +113,7 @@ class AnomalyDetection:
                 # if AMP: unscale grads, then update encoder params
                 scaler.step(self.optimizer)
 
-                scaler.update  # Check if grads valid, adjust scaler dynamiclly (noIssues=increase, NaNs/Inf=decrease)
+                scaler.update()  # Check if grads valid, adjust scaler dynamiclly (noIssues=increase, NaNs/Inf=decrease)
 
                 # extract float only, avoid pytorch tensor accumulation (gradients, etc)
                 running_loss += loss.item()
@@ -135,7 +137,10 @@ class AnomalyDetection:
 
             # Additional options as pipeline developed:
             # =====================
+            # If data split to train/val, may not be needed for this product demo
             # self.writer.add_scalar("Loss/val", val_loss, epoch_counter)
+
+            # Post training anomaly_score matrics -> would need to pre-label clips with anomalies to use
             # self.writer.add_scalar("Anomaly/Precision", precision, epoch_counter)
             # self.writer.add_scalar("Anomaly/Recall", recall, epoch_counter)
             # self.writer.add_scalar("Anomaly/F1", f1, epoch_counter)
@@ -159,7 +164,7 @@ class AnomalyDetection:
                     os.path.join(
                         self.log_dir,
                         "best_model",
-                        f"best_model_epoch_{epoch_counter}.pth.tar",
+                        f"best_model.pth.tar",
                     ),
                 )
 
