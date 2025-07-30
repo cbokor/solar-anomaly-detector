@@ -15,6 +15,7 @@ import sys
 from data.prepare_data import prepare_solar_data
 from training.train import train_model
 from data.review_processed_data import review_processed_data
+from inference.evaluate import evaluate_model
 
 # from inference.evaluate import evaluate_model
 
@@ -35,12 +36,12 @@ def parse_args():
         type=str,
         choices=["prep", "review", "train", "eval"],
         required=True,
-        help="set mode to evaluate or train model",
+        help="set mode to prepare data, review data, evaluate or train model",
     )
     parser.add_argument(
         "-data-raw",
         metavar="DIR",
-        default="D:\\Large_Data\\SolarData\\aia_lev1_4k_304A_100recordingsFrom1stNov",
+        default="D:\\Large_Data\\SolarData\\171A_low_solar_activity_2012-04-10_to_2012-04-15",
         help="path to un-processed dataset (e.g., /.tar file)",
     )
     parser.add_argument(
@@ -75,12 +76,12 @@ def parse_args():
     )
     parser.add_argument(
         "--checkpoint_dir",
-        default=None,
+        default="None",
         type=str,
         help=(
-            "Dir of desired checkpoint file within 'runs//' to load (default: None)."
+            "Dir of desired checkpoint file within 'runs//' to load (default: 'None')."
             "Follow format: 'exp-name\\%Y-%m-%d_%H-%M-%S\\checkpoints\\checkpoint_epoch_epoch_counter.pth.tar'"
-            "Or for best_model: 'exp-name\\%Y-%m-%d_%H-%M-%S\\best_model\\best_model_epoch_epoch_counter.pth.tar'"
+            "Or for best_model: 'exp-name\\%Y-%m-%d_%H-%M-%S\\best_model\\best_model.pth.tar'"
         ),
     )
     parser.add_argument(
@@ -88,6 +89,26 @@ def parse_args():
         default=True,
         type=bool,
         help="Save a .csv file of processed clip stats during 'review' mode.",
+    )
+    parser.add_argument(
+        "--eval-mode",
+        type=str,
+        choices=["heatmap", "boxes"],
+        default="boxes",
+        required=False,
+        help="set visual mode to evaluate a given video via trained model",
+    )
+    parser.add_argument(
+        "--eval-diagnostic",
+        default=False,
+        type=bool,
+        help="Set output of eval mode to provide diagnostic inofrmation (True) or normal visuals (deafult:False)",
+    )
+    parser.add_argument(
+        "--model-path",
+        default="./runs/anomaly-det_PaperConv3DAE_2025-07-22/2025-07-22_19-37-11",
+        type=str,
+        help="Path to model file following format: './runs/task_arch_YYYY-MM-DD/YYYY-MM-DD_hh-mm-ss/' ",
     )
     return parser.parse_args()
 
@@ -102,6 +123,8 @@ def main():
         args.num_workers = min(args.workers, os.cpu_count())
         cudnn.deterministic = True
         cudnn.benchmark = True
+        print(f"[INFO] Cuda is available.")
+        print("[INFO] Device Name: ", torch.cuda.get_device_name(0))
     else:
         args.num_workers = 0  # keep safe for CPU-only, avoid multiprocessing issues
         args.gpu_index = -1
@@ -115,11 +138,14 @@ def main():
         print("[INFO] Data preparation complete.")
     elif args.mode == "review":
         review_processed_data(args.data_clips, save_stats=args.save_clip_stats)
+        print("[INFO] Data review complete.")
     elif args.mode == "train":
         train_model(args, config)
         print("[INFO] Training complete & best_model selected.")
-    # elif args.mode == "eval":
-    #    evaluate_model(config)
+    elif args.mode == "eval":
+        if args.model_path == None:
+            raise ValueError(f"No Model path provided for evaluation.")
+        evaluate_model(args)
 
 
 # %% Script
@@ -130,7 +156,7 @@ if __name__ == "__main__":
     sys.argv = [
         "main.py",
         "--mode",
-        "review",
+        "eval",
         "--config",
         "config.yaml",
     ]  # override args for testing/debugging
