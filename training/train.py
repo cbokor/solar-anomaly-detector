@@ -33,34 +33,55 @@ from training.loss_functions import LOSS_REGISTRY
 
 def train_model(args, config):
     """
-    Initialise {train} mode for 3D-AE via PyTorch
+    Initialize and train a 3D Autoencoder for video anomaly detection using PyTorch.
 
-    + inform cpu and workers
-    + organise clips into a dataset
-    + define a sampler
-    + define train_loader (dataloader)
-    + optiona(view batches)
-    +
+    This function sets up the full training pipeline including:
+    - Device and worker configuration
+    - Dataset and DataLoader initialization
+    - Model instantiation from config
+    - Optimizer and scheduler setup
+    - Loss function selection from registry
+    - Optional checkpoint loading
+    - Execution of the training loop
+
+    Args:
+        args (Namespace): Command-line arguments or config object with attributes such as:
+            - device (str): Target device ('cuda' or 'cpu')
+            - num_workers (int): Number of workers for training, dataloader, etc.
+            - data_clips (str or Path): Path to training clip directory
+            - gpu_index (int): GPU index to use (set -1 or None to disable CUDA context setting)
+            - checkpoint_dir (str): Directory to load checkpoint from
+            - preload (bool): Whether to preload model from checkpoint
+        config (dict): Nested configuration dictionary containing:
+            - model: Model architecture and loss function settings
+            - optimizer: Optimizer hyperparameters
+            - training: Scheduler and training loop settings
+            - data_loader: Batch size and DataLoader flags
+
+    Notes:
+        - The model class must be defined in `conv3d_autoencoder` and match the name in `config["model"]["model_arch"]`.
+        - The loss function must be registered in `LOSS_REGISTRY`.
+        - Training is handled via the `AnomalyDetection.train_reconstrustive()` method.
+
+    Returns:
+        None
     """
 
     print("[INFO] Training with Device:", args.device)
     print("[INFO] Number of workers assigned:", args.num_workers)
-    # print("Total number of epochs:", args.epochs)
-    # print("Number of warmup epochs:", args.warmup_epochs)
 
-    # Sampler?
+    # Sampler - placeholder
 
     # Organise data into ImageLoader
     train_data = ClipDataSet(args.data_clips, transform=None)
 
-    # Organise data into DataLoader:
-
-    if args.workers > 0:
+    # Using persistent_workers=True (if more than 1 worker) avoids deleting and recreating the workers accross epochs
+    if args.num_workers > 0:
         persistent_workers = True
     else:
         persistent_workers = False
 
-    # train_data, test_data = torch.utils.data.random_split(train_data, [**, **])
+    # Organise data into DataLoader
     train_loader = DataLoader(
         train_data,
         batch_size=int(config["data_loader"]["batch_size"]),
@@ -72,15 +93,12 @@ def train_model(args, config):
         # sampler=sampler,
     )
 
-    # Optional batch view?:
-    # utils.view_example_batch(train_loader, args.batch_size)
-
     # Assign model architecture from options
     model_class_name = config["model"]["model_arch"]
     model_class = getattr(conv3d_autoencoder, model_class_name)
     model = model_class()
 
-    # Assign optimizer: default is 'Adam' with weight decay due to tiny dataset (Stable, fast, regularised for proof of concept)
+    # Assign optimizer: default is 'AdamW' for stabuility
     optimizer = torch.optim.AdamW(
         model.parameters(),
         float(config["optimizer"]["lr"]),
@@ -95,7 +113,7 @@ def train_model(args, config):
         last_epoch=-1,
     )
 
-    # Assign loss function: default is MSELoss (i.e., pixel-wise loss)
+    # Assign loss function based on config choice
     criterion_class_name = config["model"]["loss_function"]
     criterion_class = LOSS_REGISTRY[criterion_class_name]
     if "loss_params" in config["model"]:
@@ -127,5 +145,3 @@ def train_model(args, config):
 
         # Train full pipeline
         anomaly_ae.train_reconstrustive(config, train_loader)
-
-    pass
