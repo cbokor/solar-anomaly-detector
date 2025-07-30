@@ -17,44 +17,45 @@ from training.train import train_model
 from data.review_processed_data import review_processed_data
 from inference.evaluate import evaluate_model
 
-# from inference.evaluate import evaluate_model
-
-# %% Initialize
-
-
 # %% Methods
 
 
 def parse_args():
     """Construct parser"""
+
     parser = argparse.ArgumentParser(description="3D-AE via PyTorch")
     parser.add_argument(
-        "--config", type=str, default="config.yaml", help="Path to config file"
+        "-c",
+        "--config",
+        type=str,
+        default="config.yaml",
+        help="Path to config file (default: config.yaml)",
     )
     parser.add_argument(
+        "-m",
         "--mode",
         type=str,
         choices=["prep", "review", "train", "eval"],
         required=True,
-        help="set mode to prepare data, review data, evaluate or train model",
+        help="Set mode to prepare data, review data, train model, or evaluate data",
     )
     parser.add_argument(
-        "-data-raw",
+        "--data-raw",
         metavar="DIR",
         default="D:\\Large_Data\\SolarData\\171A_low_solar_activity_2012-04-10_to_2012-04-15",
-        help="path to un-processed dataset (e.g., /.tar file)",
+        help="Path to un-processed dataset (e.g., /.tar file)",
     )
     parser.add_argument(
-        "-data-clips",
+        "--data-clips",
         metavar="DIR",
         default="./data/processed",
-        help="path to processed data folder (e.g., /.pt files)",
+        help="Path to processed data folder (e.g., /.pt files)",
     )
     parser.add_argument(
         "--workers",
         default=4,
         type=int,
-        help="number of workers for dataloader (default: 4)",
+        help="Number of workers for dataloader (default: 4)",
     )
     parser.add_argument(
         "--gpu-index",
@@ -63,6 +64,7 @@ def parse_args():
         help="Use Gpu-index(0) or not if (-1)/None (default: 0).",
     )
     parser.add_argument(
+        "-d",
         "--device",
         type=torch.device,
         default=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
@@ -96,7 +98,7 @@ def parse_args():
         choices=["heatmap", "boxes"],
         default="boxes",
         required=False,
-        help="set visual mode to evaluate a given video via trained model",
+        help="Set visual mode to evaluate a given video via trained model",
     )
     parser.add_argument(
         "--eval-diagnostic",
@@ -118,8 +120,8 @@ def main():
 
     args = parse_args()
 
-    # check if gpu training is available
-    if torch.cuda.is_available():
+    # check if gpu training is chosen
+    if args.device == "cuda":
         args.num_workers = min(args.workers, os.cpu_count())
         cudnn.deterministic = True
         cudnn.benchmark = True
