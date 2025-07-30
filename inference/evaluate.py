@@ -18,31 +18,47 @@ from scipy.ndimage import label, find_objects
 
 def evaluate_model(args):
     """
-    Warning! this assumes video is (1, T, H, W)
-    full workflow for evaluate:
-    -> load model (assigning the available device: i.e., cuda or cpu)
-    -> load full_video and then slide through with clips of length T=clip_size
-    -> run model on each clip and construct recon error heat maps
-    -> normalize or clip errors before overlaying
-    -> overlay heat map or boundry boxes on original frames
-    -> rebuild and possibly annotate video, save
-    -> consider means of thresholding "anomalies" from recon error
+    Evaluate a 3D autoencoder model on a full-length video clip.
+    Outputs either a standard anomaly video or full diagnostic video based on args.
+
+    Assumptions:
+        - Input video exists in specified folder and is shaped (1, T, H, W)
+
+    Evaluation Workflow:
+        1. Load the trained model and configuration.
+        2. Load the full video to be evaluated.
+        3. Slide a window across the video to extract clips of length T=clip_len.
+        4. Run the model on each clip to produce reconstructions.
+        5. Compute pixel-wise reconstruction errors (i.e., anomaly heatmaps).
+        6. Aggregate overlapping heatmaps into a single frame-wise heatmap.
+        7. Optionally normalize, annotate, and overlay heatmaps or bounding boxes.
+        8. Concatenate visual results and save the final annotated video.
+
+    Outputs:
+        - Annotated .mp4 file containing side-by-side visual diagnostics.
+
+    Raises:
+        - ValueError: If no recognizable eval mode provided.
     """
-    # Initialize
+
+    # Initialize file paths
     movie_dir = os.path.join(args.data_clips, "full_movie_eval", "full_movie.pt")
     output_path = os.path.join(args.data_clips, "full_movie_eval", "anomaly_video.mp4")
     model_dir = os.path.join(args.model_path, "best_model", "best_model.pth.tar")
     config_path = os.path.join(args.model_path, "config.yaml")
 
+    # Load config file into local var as hierarchal dict
     with open(config_path, "r") as f:
-        config = yaml.safe_load(f)  # load config file into local var as hierarchal dict
+        config = yaml.safe_load(f)
 
+    # Read evaluation settings
     clip_len = config["data_pre_processing"]["clip_length"]
     stride = config["evaluate"]["stride"]
     threshold = config["evaluate"]["threshold"]
     min_area = config["evaluate"]["min_area"]
     weight = config["evaluate"]["heat_weight"]
     scale_factor = config["evaluate"]["scale_factor"]
+    fps = config["evaluate"]["fps"]
     device = args.device
 
     # Initialize model
@@ -56,7 +72,7 @@ def evaluate_model(args):
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
-    # Load full_video to be avaluated by anomaly detector
+    # Load and shape input video: (1, T, H, W)
     video = torch.load(movie_dir)  # shape: (T, H, W) or (1, T, H, W)
 
     if video.ndim == 3:
@@ -70,7 +86,7 @@ def evaluate_model(args):
         clip = video[:, i : i + clip_len, :, :]
         clips.append(clip)
 
-    # Run model inference per clip & compute error heatmaps
+    # Run inference and collect reconstructions/errors
     heatmaps = []  # shape (T, H, W)
     recons = []  # shape (T, H, W)
     for clip in tqdm(clips, desc=f"Reconstructing Clips"):
@@ -85,48 +101,30 @@ def evaluate_model(args):
         recons.append(recon.squeeze(0).squeeze(0).cpu())
         heatmaps.append(error.cpu())
 
-    # heatmaps = [e.mean()dim=0 for e in heatmaps] # (option) condense each clip into a single map, now list of (H, W)
-
-    # For heatmap aggregation, there are many options with adv & disadv.
-    # This arises due to the occurance of each frame accross multiple clip evals when stide < clip_length.
-    # Two common approcuhes include:
-    # - one heatmap per clip (e.g., masked to the middle of each clip)
-    # - one heatmap per frame aggregated (max, min, avg, etc) accross multipl clip model.evals()
-
-    # The former is far more lightweight, but can reduce geenralization while only seeing a heatmap ~1 in every `stride` frame.
-    # The latter is more computationaly intensive, but better represents the model as a whole IF correct aggregation used...
-    # ... relative to given data. Several examples are provided (max_agg(), mean_agg(), sum_agg()):
-
-    # Max aggregation per frame per pixel:
+    # Aggregate overlapping heatmaps (e.g., via percentile-based aggregation)
+    # Several options available: max_agg(), mean_agg(), sum_agg(), percentile_agg()
     final_heat, final_recon = percentile_agg(
         recons, heatmaps, stride, clip_len, T, H, W
     )
 
-    # Normalize heatmap and/or frames?
-    # final_heat -= final_heat.min()
-    # final_heat /= final_heat.max() + 1e-8  # avoid div-by-zero
-
-    # max = video.max()
-    # min = video.min()
-    # video = (video - min) / (max - min)
-
-    # Write video for heat_map/boxes overlay via imageio.v2
+    # Convert tensors to numpy arrays
     video_np = video.squeeze(0).numpy()  # (T, H, W)
     recon_np = final_recon.cpu().numpy()  # (T, H, W)
     heat_np = final_heat.cpu().numpy()  # (T, H, W)
-    fps = config["evaluate"]["fps"]
 
+    # Setup video writer for heat_map/boxes overlay
     writer = imageio.get_writer(output_path, fps=fps, codec="libx264")
 
+    # Main rendering loop
     if args.eval_diagnostic == False:
 
-        # eval video for anomaly detection only
-
+        # Render eval video for anomaly detection only
         for t in tqdm(range(T), desc="Assembling Eval .mp4"):
+
             frame = video_np[t]
             heat = heat_np[t]
 
-            # percentile normalization per frame based on data, not recon (good for visualizing localised anomalys)
+            # Normalization per frame based on data, not recon
             frame = percent_norm(frame)
 
             # Apply colour maps
@@ -137,10 +135,10 @@ def evaluate_model(args):
                 :, :, :3
             ]  # provide map (H,W,4) -> i.e., [R G B A] per pixel; remove alpha 'A' for (H,W,3)
 
-            # Ensure all frames are in uint8 RGB
+            # Ensure frame is uint8 RGB
             frame_rgb = to_rgb(frame)
 
-            # Generate upscaled heatmap overlay
+            # Generate upscaled heatmap with overlay info
             if args.eval_mode == "heatmap":
                 anomaly_pil = overlay_heatmap(frame, heat, weight, scale_factor)
 
@@ -173,16 +171,18 @@ def evaluate_model(args):
 
             writer.append_data(np.array(row))
 
+        print(f"[INFO] Anomaly video saved to {output_path}. Mode = {args.eval_mode}")
+
     else:
 
-        # eval video with full diagnostic output
+        # Render eval video with full diagnostic output
 
         for t in tqdm(range(T), desc="Assembling Eval .mp4"):
             frame = video_np[t]
             heat = heat_np[t]
             recon = recon_np[t]
 
-            # percentile normalization per frame based on data, not recon (good for visualizing localised anomalys)
+            # Normalization per frame based on data, not recon
             frame, recon = percent_norm(frame, recon)
 
             # Apply colour maps
@@ -196,11 +196,11 @@ def evaluate_model(args):
                 :, :, :3
             ]  # provide map (H,W,4) -> i.e., [R G B A] per pixel; remove alpha 'A' for (H,W,3)
 
-            # Ensure all frames are in uint8 RGB
+            # Ensure frames are uint8 RGB
             frame_rgb = to_rgb(frame)
             recon_rgb = to_rgb(recon)
 
-            # Generate heatmap overlay
+            # Generate upscaled heatmap with overlay info
             if args.eval_mode == "heatmap":
                 anomaly_pil = overlay_heatmap(frame, heat, weight, scale_factor)
             elif args.eval_mode == "boxes":
@@ -236,102 +236,143 @@ def evaluate_model(args):
 
             writer.append_data(np.array(row))
 
+        print(
+            f"[INFO] Diagnostic anomaly video saved to {output_path}. Mode = {args.eval_mode}"
+        )
+
     writer.close()
-    print(f"[INFO] Anomaly video with boxes saved to {output_path}")
 
 
 def overlay_heatmap(frame_grey, heat_map, weight, scale_factor):
-    # method assumes to convert float np array to uint8 PIL image for image display
-    # frame_grey can be [0,1] or [0,255], shape (H,W); heat_map also (H,W) but only [0,1]
+    """
+    Overlay a heatmap onto a grayscale frame using a colormap and alpha blending.
 
-    # percentile normalization per frame (good for visualizing localised anomalys)
+    Args:
+        frame_grey (np.ndarray): Grayscale input frame; shape (H, W), dtype float,
+                                 in range [0, 1].
+        heat_map (np.ndarray): Anomaly heatmap; shape (H, W), dtype float, expected in [0, 1].
+        weight (float): Blend weight for heatmap overlay; 0.0 = only frame, 1.0 = only heatmap.
+        scale_factor (float): Scaling factor for the final upscaled output image.
+
+    Returns:
+        PIL.Image: An upscaled RGB image showing the grayscale frame blended with a colormapped heatmap.
+
+    Notes:
+        - Percentile normalization is applied to the heatmap for contrast enhancement.
+        - `frame_grey` is converted to RGB and assumed to be properly normalized.
+        - Output image is suitable for visual inspection, not precise metric computation.
+    """
+
+    # Normalize heatmap for better visual contrast
     heat_map = percent_norm(heat_map)
 
-    # z_normed per frame (isnt great for visual but good for enhanced post-processing)
+    # Optional: z_normed per frame (isnt great for visual but good for enhanced post-processing)
     # mean = heat_map.mean()
     # std = heat_map.std()
     # heat_map = (heat_map - mean) / (std + 1e-8)
 
-    frame_rgb = to_rgb(frame_grey)  # convert to uint8 and (H,W)->(H,W,3)
+    # Convert grayscale frame to RGB uint8 format
+    frame_rgb = to_rgb(frame_grey)  # (H,W)->(H,W,3)
 
+    # Apply colormap to heatmap (e.g., "jet") and remove alpha channel
     cmap = cm.get_cmap("jet")  # -> cmap(x) return ([R, G, B, A]) for x in [0,1]
-
     heat_colored = cmap(heat_map)[
         :, :, :3
     ]  # provide map (H,W,4) -> i.e., [R G B A] per pixel; remove alpha 'A' for (H,W,3)
     heat_colored = to_rgb(heat_colored)
 
-    blended_np = ((1 - weight) * frame_rgb + weight * heat_colored).astype(
-        np.uint8
-    )  # blends grey scale and heat map, can alter weight as desired
-    blended_img = Image.fromarray(blended_np)  # convert np array to PIL image
+    # Blend grayscale frame and color heatmap with the specified weight
+    blended_np = ((1 - weight) * frame_rgb + weight * heat_colored).astype(np.uint8)
 
+    # Convert np array to PIL image
+    blended_img = Image.fromarray(blended_np)
+
+    # Upscale result and return
     return upscale_image(blended_img, scale_factor)
 
 
 def overlay_heatmap_with_boxes(
     frame_grey, heat_map, threshold, min_area, weight, scale_factor
 ):
-    """Currently includes:
-    - area filtering
-    - threshold filtering
-    - Non-maximum suppresion (IoU, larger area prioritization)"""
+    """
+    Overlay anomaly heatmap and draw bounding boxes on top of a grayscale frame.
 
-    # percentile normalization per frame (good for visualizing localised anomalys)
+    This method includes:
+        - Percentile-based normalization of the heatmap
+        - Thresholding and area-based region filtering
+        - Non-Maximum Suppression (NMS) using IoU with area prioritization
+        - Blending of the original frame with a colored heatmap
+        - Drawing red bounding boxes for detected anomaly regions
+
+    Args:
+        frame_grey (np.ndarray): Grayscale image, shape (H, W), dtype float.
+        heat_map (np.ndarray): Heatmap of anomaly scores, shape (H, W), in [0,1].
+        threshold (float): Pixel-level threshold to create binary anomaly mask (post-normalization).
+        min_area (int): Minimum pixel area to consider a region anomalous (pre-scale).
+        weight (float): Blend weight between original frame and heatmap [0,1].
+        scale_factor (float): Upscaling factor applied before drawing boxes.
+
+    Returns:
+        PIL.Image: RGB image with heatmap overlay and bounding boxes.
+    """
+
+    # Normalize heatmap for better visual contrast
     heat_map = percent_norm(heat_map)
 
+    # Upscale input arrays for higher-resolution visualization
     frame_grey_up = upscale_array(frame_grey)
     heat_map_up = upscale_array(heat_map)
 
-    frame_rgb = to_rgb(frame_grey_up)  # convert to uint8 and (H,W)->(H,W,3)
+    # Convert grayscale frame to RGB uint8
+    frame_rgb = to_rgb(frame_grey_up)  # (H,W)->(H,W,3)
 
-    # create anomaly mask and assign labels to regions
-    mask = (heat_map_up > threshold).astype(
-        np.uint8
-    )  # create 0or1 binary image (H,W) of frame past threshold
-    labeled_mask, num_labels = label(
-        mask
-    )  # assign labels to each 'connected region' in the mask (background = 0), (H, W)
+    # Create binary anomaly mask using threshold, (H,W)
+    mask = (heat_map_up > threshold).astype(np.uint8)
 
-    # create heamap colour map overlay
+    # Label connected components in the binary mask (background = 0), (H, W)
+    labeled_mask, num_labels = label(mask)
+
+    # Apply colormap to heatmap and remove alpha channel
     cmap = cm.get_cmap("jet")
     heat_colored = cmap(heat_map_up)[
         :, :, :3
     ]  # provide map (H,W,4) -> i.e., [R G B A] per pixel; remove alpha 'A' for (H,W,3)
     heat_colored = to_rgb(heat_colored)
 
-    # blend rgb frame and heatmap
+    # Blend grayscale RGB frame with heatmap
     blended_np = ((1 - weight) * frame_rgb + weight * heat_colored).astype(np.uint8)
     blended_img = Image.fromarray(blended_np)  # convert np array to PIL image
 
-    # extract bounding boxes and draw with iou filtering
-
+    # Prepare for drawing bounding boxes
     boxes = []
     draw = ImageDraw.Draw(blended_img)
 
+    # Find bounding boxes for labeled regions
     # list of tuples for each labelled obj, each tuple has N=input_dim=2 slices,
     # each slice indicates smallest 3d parallelepiped containing obj. 3rd element of each slice is thus None for N=2
     slices = find_objects(labeled_mask)
     min_area_up = min_area * (scale_factor**2)
+
     for i, slc in enumerate(slices):
         if slc == None:
             continue
 
-        # extract 2d box pixel coordinates
+        # Extract 2d box pixel coordinates
         y1, y2 = slc[0].start, slc[0].stop
         x1, x2 = slc[1].start, slc[1].stop
 
-        # area filtering - skip annomaly if too small
+        # Apply area filtering - skip annomaly if too small
         area = (x2 - x1) * (y2 - y1)
         if area >= min_area_up:
             boxes.append([x1, y1, x2, y2, area])
 
-    # sort boxes in descending area to prioritize larger areas
+    # Sort boxes in descending area to prioritize larger areas
     boxes = sorted(boxes, key=lambda b: b[4], reverse=True)
 
     iou_thresh = 0.3
     kept_boxes = []
 
+    # Apply Non maximum suppresion, I.e.,
     # retain a box only if its IoU with all already-kept boxes is less than the threshold.
     for candidate in boxes:
         keep = True
@@ -342,6 +383,7 @@ def overlay_heatmap_with_boxes(
         if keep:
             kept_boxes.append(candidate)
 
+    # Draw retained boxes on image
     for box in kept_boxes:
         x1, y1, x2, y2, _ = box
         draw.rectangle([x1, y1, x2, y2], outline=(255, 0, 0), width=2)
@@ -350,45 +392,83 @@ def overlay_heatmap_with_boxes(
 
 
 def annotate_frame(frame, type, font_size=14, stats=None):
-    """Assumes frame is already PIL image"""
+    """
+    Annotate a given PIL image with a label and optional per-frame statistics.
+
+    Args:
+        frame (PIL.Image): The input image to annotate (assumed to be in RGB).
+        type (str): Type of frame, used to determine label.
+                    Options: "data", "recon", "anomaly".
+        font_size (int): Font size for annotations.
+        stats (dict, optional): Dictionary of per-frame stats to display.
+                                Keys will be shown with float values (3 decimals).
+
+    Returns:
+        PIL.Image: The annotated image.
+
+    Raises:
+        TypeError: If an unrecognized frame type is provided.
+    """
 
     draw = ImageDraw.Draw(frame)
 
+    # Load preferred font, fallback to default if unavailable
     try:
         font = ImageFont.truetype("arial.ttf", font_size)
     except:
         font = ImageFont.load_default()
 
+    # Starting position for text
+    label_color = (255, 50, 50)
     x, y = 5, 5
+
+    # Draw the frame label based on the type
     if type == "data":
-        draw.text((x, y), f"Data", fill=(255, 50, 50), font=font)
+        draw.text((x, y), f"Data", fill=label_color, font=font)
     elif type == "recon":
-        draw.text((x, y), f"Reconstruction", fill=(255, 50, 50), font=font)
+        draw.text((x, y), f"Reconstruction", fill=label_color, font=font)
     elif type == "anomaly":
-        draw.text((x, y), f"Anomaly Model", fill=(255, 50, 50), font=font)
+        draw.text((x, y), f"Anomaly Model", fill=label_color, font=font)
     else:
         raise TypeError("Provided frame type not recognised for annotation")
 
+    # Optionally draw statistics below the label
     if stats:
         for key, value in stats.items():
             y += font_size + 2
-            draw.text((x, y), f"{key}: {value:.3f}", fill=(255, 50, 50), font=font)
+            draw.text((x, y), f"{key}: {value:.3f}", fill=label_color, font=font)
 
     return frame
 
 
 def compute_iou(boxA, boxB):
+    """
+    Compute the Intersection over Union (IoU) between two bounding boxes.
+
+    Args:
+        boxA (list or tuple): Bounding box in the format [x1, y1, x2, y2].
+        boxB (list or tuple): Bounding box in the format [x1, y1, x2, y2].
+
+    Returns:
+        float: IoU score between 0.0 and 1.0.
+    """
+    # Determine the coordinates of the intersection rectangle
     xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
     xB = min(boxA[2], boxB[2])
     yB = min(boxA[3], boxB[3])
 
-    interArea = max(0, xB - xA) * max(0, yB - yA)
-    if interArea == 0:
-        return 0.0
+    # Compute area of intersection
+    inter_area = max(0, xB - xA) * max(0, yB - yA)
+    if inter_area == 0:
+        return 0.0  # No overlap
 
-    boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
-    boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
-    iou = interArea / float(boxAArea + boxBArea - interArea)
+    # Compute area of both bounding boxes
+    areaA = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    areaB = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+    # Compute union and IoU
+    union_area = float(areaA + areaB - inter_area)
+    iou = inter_area / union_area
 
     return iou
