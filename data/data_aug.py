@@ -1,4 +1,4 @@
-# %% Import
+# %% Imports
 
 import os
 import torch
@@ -17,11 +17,6 @@ class ClipDataSet(Dataset):
     Note: If transforms include spatial transforms (like RandomCrop, RandomHorizontalFlip),
     they must be applied identically across all frames in a clip, otherwise breaking temporal consistency.
     Standard torchvision transforms dont handle temporal consistency out of the box.
-    For real 3D transforms, need something like:
-        - torchvision.io.VideoReader + torchvision.transforms.videotransforms (limited)
-        - third-party libraries like PyTorchVideo for video-clip-aware transforms.
-        - write custom transform functions that apply the same random parameters to each frame in the clip.
-
     """
 
     def __init__(self, clip_dir, transform=None):
@@ -30,6 +25,7 @@ class ClipDataSet(Dataset):
         """
         self.clip_dir = clip_dir
         self.transform = transform
+        # extract only .pt files from given clip_dir
         self.clip_files = sorted(f for f in os.listdir(clip_dir) if f.endswith(".pt"))
 
     def __len__(self):
