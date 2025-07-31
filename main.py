@@ -55,7 +55,10 @@ def parse_args():
         "--workers",
         default=4,
         type=int,
-        help="Number of workers for dataloader (default: 4)",
+        help=(
+            "User requestd number of workers for training, dataloader, etc (default: 4)"
+            "Actual args.num_workers dictated by script based on request for safety."
+        ),
     )
     parser.add_argument(
         "--gpu-index",
