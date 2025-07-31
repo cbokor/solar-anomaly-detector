@@ -7,31 +7,31 @@ from tqdm import tqdm
 from datetime import datetime
 from torch.amp.grad_scaler import GradScaler
 
-# %% Jobs
-"""
-priority:
-
-low_priority:
-- tensorboard and protobuff dependancy tug of war!??!?!?! COMPLETE but! maybe worth reading into
-- apparently conda channels are often months behind the latest PyPI packages, research 'pip' and 'PyPI'
-- my graphics card is low on vram for CNN work, currently using cpu. for gpu try batch_size=2 only with AMP 
-    and gradient accumulation (otherwise batch_size=1, batch_size>2 is likely to generate OOP errors)
-- currently doing writter logs per epoch, checkpoints based on division of epoch (may want per iter in future)
-- form a config class to formalise the config.yaml file format, enabling automated experiemnt tracking (do at end of build)
-- if i update and checkpoint logging, will need to update extract_checkpoint
-"""
-
 # %% Class
 
 
 class AnomalyDetection:
     """
-    Wrapper class for managing anomaly detection training pipeline components including model, optimizer,
-    scheduler, loss function, and writter logging.
+    Wrapper class for managing the anomaly detection training pipeline.
+
+    This class encapsulates all necessary components for training an anomaly detection model,
+    including the model itself, the optimizer, learning rate scheduler, loss function, and
+    logging via TensorBoard's SummaryWriter.
+
+    Attributes:
+        model (nn.Module): The PyTorch model used for anomaly detection.
+        optimizer (torch.optim.Optimizer): Optimizer used to update model weights.
+        scheduler (torch.optim.lr_scheduler._LRScheduler): Learning rate scheduler.
+        criterion (Callable): Loss function used to train the model.
+        config (dict): Configuration dictionary with training and model parameters.
+        device (torch.device): Device to run the model on (CPU or CUDA).
+        log_dir (str): Path to the directory where logs are saved.
+        writer (SummaryWriter): TensorBoard SummaryWriter for logging metrics and outputs.
     """
 
     def __init__(self, model, optimizer, scheduler, criterion, config, device):
         """Instance input properties and initiate SummaryWriter"""
+
         self.model = model.to(device, non_blocking=True)
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -48,7 +48,10 @@ class AnomalyDetection:
         )
 
     def extract_checkpoint(self, checkpoint_dir):
-        """load previous specified sim_clr checkpoint into encoder, default: args.checkpoint_path"""
+        """Load previous specified checkpoint into encoder, default: args.checkpoint_path"""
+
+        # UNTESTED!
+
         checkpoint_path = os.path.join("runs", checkpoint_dir)
         print(f"Loading checkpoint from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path)
@@ -68,11 +71,23 @@ class AnomalyDetection:
 
     def train_reconstrustive(self, config, train_loader):
         """
-        main training loop for chosen reconstructive architecture
-        optional AutoMixedPrecision
+        Train the model using a reconstructive objective.
+
+        This method executes the main training loop for a reconstructive anomaly detection model,
+        optionally utilizing Automatic Mixed Precision (AMP) to speed up training and reduce memory usage.
+
+        Logging is handled using TensorBoard SummaryWriter. Checkpoints are saved periodically
+        and whenever a new best loss is achieved.
+
+        Parameters
+        ----------
+            config : dict
+                Configuration dictionary containing training parameters.
+            train_loader : DataLoader
+                PyTorch DataLoader providing the training video clips.
         """
 
-        # Class to handle dynamic loss scaling
+        # Enable AMP if specified in config and supported by device
         use_amp = config["training"]["amp"] and self.device.type == "cuda"
         scaler = GradScaler(enabled=use_amp)
 
@@ -103,33 +118,28 @@ class AnomalyDetection:
                         outputs, clips
                     )  # outputs PyTorch Tensor scalar: tesnor(float, device)
 
-                self.optimizer.zero_grad(
-                    set_to_none=True
-                )  # zero out gradients to prevent accumulaion (PyTorch default is to accumulate)
+                # Zero out gradients to prevent accumulaion (faster with `set_to_none=True`)
+                self.optimizer.zero_grad(set_to_none=True)
 
-                # compute grads and scale to prevent vanishing grads/underflow in float16 (AMP)
+                # Compute grads and scale to prevent vanishing grads/underflow in float16 (AMP)
                 scaler.scale(loss).backward()
 
-                # if AMP: unscale grads, then update encoder params
+                # If AMP: unscale grads, then update encoder params
                 scaler.step(self.optimizer)
 
                 scaler.update()  # Check if grads valid, adjust scaler dynamiclly (noIssues=increase, NaNs/Inf=decrease)
 
-                # extract float only, avoid pytorch tensor accumulation (gradients, etc)
+                # Accumulate loss, extract float only to avoid pytorch tensor accumulation (gradients, etc)
                 running_loss += loss.item()
-
-                # disp
                 loop.set_postfix(loss=loss.item())
 
             avg_epoch_loss = running_loss / len(train_loader)
 
-            # warmup period (scheduler holds learning rate constant for first 'args.warmup_epochs' epochs)
+            # Update learning rate scheduler (after warmup period)
             if (epoch_counter) >= self.config["training"]["warmup_epochs"]:
                 self.scheduler.step()
 
-            # Writter logging:
-
-            # Log scalars
+            # Log scalar metrics to TensorBoard
             self.writer.add_scalar("AvgLoss/train", avg_epoch_loss, epoch_counter)
             self.writer.add_scalar(
                 "learning_rate", self.scheduler.get_last_lr()[0], epoch_counter
@@ -150,6 +160,7 @@ class AnomalyDetection:
             # self.writer.add_scalar("ReconError/Std", recon_errors.std(), epoch_counter)
             # =====================
 
+            # Save best-performing model
             if avg_epoch_loss < best_loss:
                 best_loss = avg_epoch_loss
 
@@ -168,10 +179,10 @@ class AnomalyDetection:
                     ),
                 )
 
+            # Save periodic checkpoints and example inputs
             if epoch_counter % self.config["training"]["checkpoint_interval"] == 0:
-                # Writer logs and checkpoint
 
-                # Extract example batch on cpu then extract single frame from closest to middle of clip
+                # Extract a middle frame from the first clip batch for visualization
                 first_clip = next(iter(train_loader))[0]  # (C, T, H, W)
                 middle_idx = first_clip.shape[1] // 2
                 middle_frame = first_clip[:, middle_idx, :, :]  # (C, H, W)
@@ -197,4 +208,5 @@ class AnomalyDetection:
                     ),
                 )
 
+        # Finalize and close the writer
         self.writer.close()
