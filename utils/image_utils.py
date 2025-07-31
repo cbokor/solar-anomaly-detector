@@ -23,6 +23,9 @@ def upscale_array(arr, scale_factor=4):
 
 
 def upscale_image(img, scale_factor=4, resample=Image.Resampling.NEAREST):
+    """
+    Upscales a PIL Image using nearest-neighbor interpolation.
+    """
 
     new_size = (img.width * scale_factor, img.height * scale_factor)
 
@@ -30,6 +33,9 @@ def upscale_image(img, scale_factor=4, resample=Image.Resampling.NEAREST):
 
 
 def to_rgb(img):
+    """
+    Convert given Numpy array to uint8 if not and rgb if grayscale.
+    """
 
     if img.ndim == 2:  # grayscale (H, W)
         img = np.stack([img] * 3, axis=-1)
@@ -40,6 +46,10 @@ def to_rgb(img):
 
 
 def percent_norm(frame, frame2=None):
+    """
+    Apply percentile norm to given frame, assuming numpy array input.
+    Optionaly applies the percentile bands from initial frame to a second frame2.
+    """
 
     p1 = np.percentile(frame, 1)
     p99 = np.percentile(frame, 99)

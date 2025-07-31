@@ -1,5 +1,14 @@
 # %% Import
 
+# temporary patch to solve enviroment conflict. summarywritter needs bool8, which was removed after numpy 1.2.3
+# need to downgrade numpy to 1.2.3.5 once download script done
+# ==============================
+import numpy as np
+
+if not hasattr(np, "bool8"):
+    np.bool8 = np.bool_
+# ==============================
+
 import os
 import shutil
 import torch
@@ -10,6 +19,39 @@ from torch.utils.tensorboard.writer import SummaryWriter
 
 
 def setup_logging_dir(config_path, root_dir="runs", exp_name=None):
+    """
+    Set up a directory structure for logging and checkpointing during training.
+
+    This function creates a timestamped experiment directory under the specified root,
+    copies the given configuration file to that directory, and initializes a TensorBoard
+    `SummaryWriter` for logging.
+
+    The following subdirectories are created:
+        - checkpoints: for storing periodic model checkpoints
+        - best_model: for storing the best performing model
+        - logs: for TensorBoard logs
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the configuration YAML file to be copied into the log directory.
+    root_dir : str, optional
+        Root directory under which experiment folders will be created (default is "runs").
+    exp_name : str, optional
+        Custom experiment name. If None, defaults to "default_experiment".
+
+    Returns
+    -------
+    log_dir : str
+        Full path to the created experiment logging directory.
+    writer : SummaryWriter
+        TensorBoard SummaryWriter initialized for the experiment.
+
+    Side Effects
+    ------------
+    - Creates directories for logs and checkpoints if they don't exist.
+    - Copies the config file to the log directory.
+    """
 
     if exp_name is None:
         exp_name = "default_experiment"
@@ -37,7 +79,3 @@ def setup_logging_dir(config_path, root_dir="runs", exp_name=None):
 def save_checkpoint(state, path):
     """Save specifed 'state' package to designated path."""
     torch.save(state, path)
-
-
-def config_template():
-    pass
