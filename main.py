@@ -15,6 +15,7 @@ import sys
 from data.prepare_data import prepare_solar_data
 from training.train import train_model
 from data.review_processed_data import review_processed_data
+from utils.logging import launch_tensorboard
 from inference.evaluate import evaluate_model
 
 # %% Methods
@@ -115,6 +116,11 @@ def parse_args():
         type=str,
         help="Path to model file following format: './runs/task_arch_YYYY-MM-DD/YYYY-MM-DD_hh-mm-ss/' ",
     )
+    parser.add_argument(
+        "--tensorboard",
+        action="store_true",
+        help="Launch TensorBoard during training",
+    )
     return parser.parse_args()
 
 
@@ -145,6 +151,8 @@ def main():
         review_processed_data(args.data_clips, save_stats=args.save_clip_stats)
         print("[INFO] Data review complete.")
     elif args.mode == "train":
+        if args.tensorboard:
+            launch_tensorboard(log_dir="runs", port=6006)
         train_model(args, config)
         print("[INFO] Training complete & best_model selected.")
     elif args.mode == "eval":
@@ -164,6 +172,7 @@ if __name__ == "__main__":
         "eval",
         "--config",
         "config.yaml",
+        "--tensorboard",
     ]  # override args for testing/debugging
 
     main()

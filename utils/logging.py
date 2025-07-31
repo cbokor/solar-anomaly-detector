@@ -1,21 +1,44 @@
 # %% Import
 
-# temporary patch to solve enviroment conflict. summarywritter needs bool8, which was removed after numpy 1.2.3
-# need to downgrade numpy to 1.2.3.5 once download script done
-# ==============================
 import numpy as np
 
+# --- Monkey-patch for NumPy >= 1.24 compatibility ---
 if not hasattr(np, "bool8"):
-    np.bool8 = np.bool_
-# ==============================
+    np.bool8 = (
+        np.bool_
+    )  # TODO: Remove once summarywritter/tensorboard dependencies stop using np.bool8
+# ==================================
 
 import os
 import shutil
 import torch
+import webbrowser
+from tensorboard import program
 from datetime import datetime
 from torch.utils.tensorboard.writer import SummaryWriter
 
 # %% Methods
+
+
+def launch_tensorboard(log_dir="runs", port=6006, open_browser=True):
+    """
+    Launch TensorBoard with monkey-patched numpy.bool8 for compatibility.
+
+    Parameters:
+    - log_dir (str): Path to the TensorBoard log directory.
+    - port (int): Port to serve TensorBoard on.
+    - open_browser (bool): Whether to open the TensorBoard URL in a browser.
+    """
+    tb = program.TensorBoard()
+    tb.configure(argv=[None, "--logdir", log_dir, "--port", str(port)])
+    url = tb.launch
+
+    print(f"[TensorBoard] Running at: {url}")
+    if open_browser:
+        try:
+            webbrowser.open(url)
+        except Exception as e:
+            print(f"[Tensorboard] Could not open browser: {e}")
 
 
 def setup_logging_dir(config_path, root_dir="runs", exp_name=None):
