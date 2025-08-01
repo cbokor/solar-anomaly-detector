@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument(
         "--data-raw",
         metavar="DIR",
-        default="D:\\Large_Data\\SolarData\\171A_low_solar_activity_2012-04-10_to_2012-04-15",
+        default="D:\\Large_Data\\SolarData\\171A_mothers_day_storms_2024-05-10_to_2024-05-11",
         help="Path to un-processed dataset (e.g., /.tar file)",
     )
     parser.add_argument(
@@ -121,6 +121,11 @@ def parse_args():
         action="store_true",
         help="Launch TensorBoard during training",
     )
+    parser.add_argument(
+        "--movie_only",
+        action="store_true",
+        help="Only produce a movie when in 'review' mode, outputting no training clips",
+    )
     return parser.parse_args()
 
 
@@ -145,7 +150,9 @@ def main():
 
     # Check mode and proceed accordingly
     if args.mode == "prep":
-        prepare_solar_data(args.data_raw, args.data_clips, config)
+        prepare_solar_data(
+            args.data_raw, args.data_clips, config, movie_only=args.movie_only
+        )
         print("[INFO] Data preparation complete.")
     elif args.mode == "review":
         review_processed_data(args.data_clips, save_stats=args.save_clip_stats)
@@ -173,6 +180,7 @@ if __name__ == "__main__":
         "--config",
         "config.yaml",
         "--tensorboard",
+        "--movie_only",
     ]  # override args for testing/debugging
 
     main()

@@ -227,7 +227,7 @@ def process_fits_image(fits_path, resize=(112, 112), precision="float32"):
 # %% Methods (data specific)
 
 
-def prepare_solar_data(tar_dir, out_dir, config):
+def prepare_solar_data(tar_dir, out_dir, config, movie_only=False):
     """
     Prepares solar image data from FITS files (direct or inside .tar archives) into normalized, resized, and timestamped
     PyTorch tensors suitable for training video-based models.
@@ -428,34 +428,35 @@ def prepare_solar_data(tar_dir, out_dir, config):
     out_path = os.path.join(movie_dir, out_name)
     torch.save(movie_tensor, out_path)
 
-    # Create clips of specified length for training + validation
-    for i, start in tqdm(
-        enumerate(range(0, len(frames) - clip_len + 1, stride)),
-        desc=f"[INFO] Saving clips:",
-        unit="clip",
-    ):
-        end = start + clip_len
-        clip = frames[start:end]
+    if movie_only == False:
+        # Create clips of specified length for training + validation
+        for i, start in tqdm(
+            enumerate(range(0, len(frames) - clip_len + 1, stride)),
+            desc=f"[INFO] Saving clips:",
+            unit="clip",
+        ):
+            end = start + clip_len
+            clip = frames[start:end]
 
-        # If any gap flag inside this clip is True, mark to be send to gapped_dir
-        has_gap = any(
-            gap_flags[start + 1 : end]
-        )  # +1 so a gap marks the *start* of missing interval
+            # If any gap flag inside this clip is True, mark to be send to gapped_dir
+            has_gap = any(
+                gap_flags[start + 1 : end]
+            )  # +1 so a gap marks the *start* of missing interval
 
-        # Convert to tensor and add channel dimension (assuming grey scale images)
-        clip_tensor = torch.tensor(clip, dtype=data_type).unsqueeze(
-            1
-        )  # (T, H, W) -> (T, C=1, H, W)
+            # Convert to tensor and add channel dimension (assuming grey scale images)
+            clip_tensor = torch.tensor(clip, dtype=data_type).unsqueeze(
+                1
+            )  # (T, H, W) -> (T, C=1, H, W)
 
-        # Convert to expected format for CNN's in Pyorch,
-        # forward compatable to support multi-channel input in the future (e.g., 171A & 304A)
-        clip_tensor = clip_tensor.permute(1, 0, 2, 3)  # -> (C=1, T, H, W)
+            # Convert to expected format for CNN's in Pyorch,
+            # forward compatable to support multi-channel input in the future (e.g., 171A & 304A)
+            clip_tensor = clip_tensor.permute(1, 0, 2, 3)  # -> (C=1, T, H, W)
 
-        # Assign dir accordingly per has_gap and save
-        subdir = gapped_dir if has_gap else out_dir
-        out_name = f"clip_{i:04d}.pt"
-        out_path = os.path.join(subdir, out_name)
-        torch.save(clip_tensor, out_path)
+            # Assign dir accordingly per has_gap and save
+            subdir = gapped_dir if has_gap else out_dir
+            out_name = f"clip_{i:04d}.pt"
+            out_path = os.path.join(subdir, out_name)
+            torch.save(clip_tensor, out_path)
 
     # Clean up all temporary directories
     for _, temp_obj in all_fits_files:
