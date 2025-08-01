@@ -145,21 +145,6 @@ class AnomalyDetection:
                 "learning_rate", self.scheduler.get_last_lr()[0], epoch_counter
             )
 
-            # Additional options as pipeline developed:
-            # =====================
-            # If data split to train/val, may not be needed for this product demo
-            # self.writer.add_scalar("Loss/val", val_loss, epoch_counter)
-
-            # Post training anomaly_score matrics -> would need to pre-label clips with anomalies to use
-            # self.writer.add_scalar("Anomaly/Precision", precision, epoch_counter)
-            # self.writer.add_scalar("Anomaly/Recall", recall, epoch_counter)
-            # self.writer.add_scalar("Anomaly/F1", f1, epoch_counter)
-
-            # Log Reconstruction error stats
-            # self.writer.add_scalar("ReconError/Mean", recon_errors.mean(), epoch_counter)
-            # self.writer.add_scalar("ReconError/Std", recon_errors.std(), epoch_counter)
-            # =====================
-
             # Save best-performing model
             if avg_epoch_loss < best_loss:
                 best_loss = avg_epoch_loss

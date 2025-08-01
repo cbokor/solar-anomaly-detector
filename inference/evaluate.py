@@ -8,7 +8,7 @@ import imageio.v2 as imageio
 import matplotlib.cm as cm
 import models.conv3d_autoencoder as conv3d_autoencoder
 from utils.image_utils import to_rgb, upscale_array, upscale_image, percent_norm
-from video_aggregators import percentile_agg
+from inference.video_aggregators import percentile_agg
 from tqdm import tqdm
 from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import label, find_objects
