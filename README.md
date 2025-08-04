@@ -2,7 +2,7 @@
 
 Unsupervised learning for computer vision based anomaly detection via a modular PyTorch pipeline and reconstructive 3D-AE.
 
-**Not much time to read?** [Watch a demo video!](demo/anomaly_detection_low_level.mp4)
+**Not much time to read?** [Watch a demo video!](demo/anomaly_video_low_level.mp4)
 
 ## Key Features
 
@@ -54,19 +54,19 @@ The imagery was acquired using the [SunPy](https://sunpy.org) Python library and
 
 The `demo/` folder includes two videos showcasing anomaly detection results using the 3D convolutional autoencoder based on [Mengjia et al. (2020)](http://dx.doi.org/10.1016/j.jvcir.2019.102747):
 
-> **Legend:**  
+**Legend:**  
 > **Red Boxes** = low-level anomalies (2% ≤ reconstruction loss < 8%)  
 > **Light Blue Boxes** = high-level anomalies (reconstruction loss ≥ 8%)  
-> **Top left No of Boundary Boxes** = live reconstruction loss (0->1, i.e., 0.08 = 8%)
+> **Top left Number of Boundary Boxes** = live reconstruction loss (0->1, i.e., 0.08 = 8%)
 > **Global Stats** = the mean, max and standard deviation reconstruction loss values for the entire frame
 
-These thresholds are defined in `config.yaml` as `threshold_low` and `threshold_high`.
+These thresholds are defined in `config.yaml` as `threshold_low` and `threshold_high`. Training was done with the provided example [`config.yaml`](config.yaml).
 
-- **(a) [Low-Level Dynamics Video](demo/anomaly_detection_low_level.mp4)**  
-  Emphasizes subtle activity and regular solar intensity fluctuations, along with residual heatmaps and anomaly bounding boxes.
+- **(a) [Low-Level Dynamics Video](demo/anomaly_video_low_level.mp4)**  
+  Left panel emphasizes subtle activity and regular solar intensity fluctuations; right panel contains residual heatmap and anomaly bounding boxes.
 
-- **(b) [High-Intensity Events Video](demo/anomaly_detection_high_level.mp4)**  
-  Focuses on intense solar events (e.g., major flares), using a residual map and bounding box overlays to highlight anomalous regions.
+- **(b) [High-Intensity Events Video](demo/anomaly_video_high_level.mp4)**  
+  Left panel colourscale shifted to focus on intense solar events (e.g., major flares); right panel again shows the same residual heatmap and anomaly bounding boxes.
 
 All major activity was successfully captured using a **moderately deep 3D autoencoder** (13 parameterized layers, no skip connections, wide early layers). While training is GPU-intensive, the final model is suitable for **inference in embedded systems** after post-processing (e.g., quantization, pruning).
 
@@ -94,9 +94,9 @@ The repo includes four separate pipeline modes all run from `main.py` that must 
 
 + `"prep"` -> tools for processing raw .fits and .tar files into Torch tensors suitable for training. Runs [`prepare_solar_data()`](data/prepare_data.py) from `data/prepare_data.py`. Always generates a video of provided raw files. Has an arg mode to generate only the video and not clips for later evaluation. 
 
-+ `"review"` -> automatic and manual tools for reviewing processed data clips (e.g, manually select clips with anomalies in and segregate from training data, using intensity stats automatically segregate outlier clips). Runs [`review_processed_data()`](data/review_processed_data.py) from `data/review_processed_data.py`.
++ `"review"` -> automatic and manual tools for reviewing processed data clips (e.g, manually select clips with anomalies in and segregate from training data, use intensity stats to automatically segregate outlier clips). Runs [`review_processed_data()`](data/review_processed_data.py) from `data/review_processed_data.py`.
 
-+ `"train"` -> full training pipeline from training clips with summary writer logging. Optional tensorboard visual monitoring and prior training checkpoint loading provided. Runs [`train_model()`](training/train.py) from `training/train.py`.
++ `"train"` -> full training pipeline using training clips with summary writer logging. Optional tensorboard visual monitoring and prior training checkpoint loading provided. Runs [`train_model()`](training/train.py) from `training/train.py`.
 
 + `"eval"` -> evaluate a given torch tensor movie via a trained model to output a .mp4 movie. Several optional features are included (e.g., diagnostic or standard output video, boundary box inclusion or just heatmap, etc). Runs [`evaluate_model()`](inference/evaluate) from `inference/evaluate`.
 
