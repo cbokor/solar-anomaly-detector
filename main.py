@@ -1,4 +1,4 @@
-# %% Tensorboard setep
+# %% Tensorboard setep reminder (auto open included in {train} mode)
 # (1) tensorboard --logdir="...<ThisRepoFolder>\runs"
 # (2) http://localhost:6006
 
@@ -173,14 +173,15 @@ def main():
 # Only operate main() if called directly (i.e., not as module, __name__ = "my_module")
 if __name__ == "__main__":
 
-    sys.argv = [
-        "main.py",
-        "--mode",
-        "eval",
-        "--config",
-        "config.yaml",
-        "--tensorboard",
-        "--movie_only",
-    ]  # override args for testing/debugging
+    # Can override args for testing/debugging
+    # sys.argv = [
+    #     "main.py",
+    #     "--mode",
+    #     "eval",
+    #     "--config",
+    #     "config.yaml",
+    #     "--tensorboard",
+    #     "--movie_only",
+    # ]
 
     main()
