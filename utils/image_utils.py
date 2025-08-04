@@ -55,7 +55,7 @@ def percent_norm(frame, frame2=None):
     p99 = np.percentile(frame, 99)
     frame = np.clip((frame - p1) / (p99 - p1), 0, 1)
 
-    if frame2:
+    if frame2 is not None:
         frame2 = np.clip((frame2 - p1) / (p99 - p1), 0, 1)
         return frame, frame2
 
