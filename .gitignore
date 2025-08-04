@@ -2,5 +2,10 @@
 *.py[cod]
 *.pth.tar
 *.pth.fits
-data/processed/
-runs/
+
+# Ignore all contents of these folders
+runs/*
+!runs/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
