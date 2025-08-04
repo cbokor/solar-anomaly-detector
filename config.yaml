@@ -1,27 +1,40 @@
 data_pre_processing:
-  clip_length: 16
-  resize: [112,112]
+  clip_length: 32 # length of clips for training
+  resize: [112,112] # image size for training
   precision: "float32" # float32 or float16, no others supported
-  stride: 1
+  stride: 4 # the stride value for generating training clips
+  sample_interval_sec: 60 # expected cadence between provided data frames
+  gap_threshhold: 3 # allowable threshold multiple of expected sample_interval_sec before clip deemed corrupted (e.g., 3x60 = 180s gap allowable)
 
 data_loader:
-  batch_size: 8   # try 2 if AMP active
-  drop_last: True
+  batch_size: 8   # this was based on my hardware primarily, change as optimal for you
+  drop_last: True # ignore last batch (for when the number of examples dataset is not divisible by batch_size)
 
 optimizer:
-  type: "Adam"
-  lr: 0.001
-  weight_decay: 1e-5
+  type: "AdamW" # weighted adam for stabuility
+  lr: 1e-3 # learning rate with cosine annealed scheduler
+  weight_decay: 1e-5 # weight decay for regulurization
 
 model:
-  model_arch: "PaperConv3DAE"
-  loss_function: "MSELoss"
+  model_arch: "PaperConv3DAE" # reconstructive 3D-AE
+  loss_function: "MSE_SSIMLoss" # pairs well with reconstructive -> mse for standard error & ssim to enforce some structure retention (e.g., punish occlusion) 
   #loss_params:
   #  example: 0.01
 
 training:
-  amp: False  # include autoMixedPrecision (default: False)
+  amp: True  # include autoMixedPrecision (default: True)
   start_epoch: 0  # Initial epoch, changed if checkpoint loaded (default: 0)
-  epochs: 50  # Total number of epochs for training (default: 50)
-  warmup_epochs: 10 # No of epochs where lr is held constant (default: 10)
-  checkpoint_interval: 5 # checkpoint saved every {value} epochs (default: 5)
+  epochs: 100  # Total number of epochs for training (default: 100)
+  warmup_epochs: 5 # No of epochs where lr is held constant (default: 5)
+  checkpoint_interval: 10 # checkpoint saved every {value} epochs (default: 10)
+  eta_min: 1e-6 # minimum learning rate for cosine annealed scheduler 
+
+evaluate:
+  fps: 24 # frames per second of output video
+  threshold_low: 0.02 # threshold out of 0->1 error to register as low level anomaly
+  threshold_high: 0.08 # threshold out of 0->1 error to register as high level anomaly
+  min_area: 4 # minimum area of anomaly boundry boxes to be registered for display
+  stride: 1 # the stride value for output video of evaluation based on input movie
+  heat_weight: 0.4 # 0->1; intensity of heatmap over greyscale images
+  iou_thresh: 0.2 # intersection over union threshold for boundry box deletion (larger areas retained)
+  scale_factor: 4 # upscale multiplier for image size (i.e., 'resize') upon mp4 generation
