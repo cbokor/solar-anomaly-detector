@@ -22,7 +22,7 @@ This repository contains a modular PyTorch pipeline for testing and evaluating v
 - Defence and autonomous systems  
 - Space weather and astrophysics 
 
-To demonstrate, we provide a reproducible implementation of [Mengjia et al. (2020)](http://dx.doi.org/10.1016/j.jvcir.2019.102747), applying a 3D convolutional autoencoder to detect spatiotemporal anomalies in time-series imagery of the Sun (e.g., solar flares, coronal mass ejections).
+To demonstrate, I provide a reproducible implementation of [Mengjia et al. (2020)](http://dx.doi.org/10.1016/j.jvcir.2019.102747), applying a 3D convolutional autoencoder to detect spatiotemporal anomalies in time-series imagery of the Sun (e.g., solar flares, coronal mass ejections).
 
 > While this project emphasizes modularity and embedded-friendly design, it is **not** currently optimized for real-time or resource-constrained deployment.
 
@@ -32,21 +32,21 @@ To demonstrate, we provide a reproducible implementation of [Mengjia et al. (202
 
 ## Example Results - "Mother's Day Solar Storm" 2024
 
-Solar imagery provides an excellent real-world testbed for spatiotemporal anomaly detection. Instruments like **AIA on SDO** observe the Sun in multiple extreme ultraviolet (EUV) and UV wavelengths (e.g., **171 Å**, **304 Å**, **1700 Å**), each sensitive to different plasma temperatures and solar layers (corona, transition region, photosphere). This leads to complex signal characteristics and dynamics such as:
+Solar imagery provides an excellent real-world testbed for spatiotemporal anomaly detection. Instruments like **AIA** on the **Solar Dynamics Observatory (SDO)** observe the Sun in multiple extreme ultraviolet (EUV) and UV wavelengths (e.g., **171 Å**, **304 Å**, **1700 Å**), each sensitive to different plasma temperatures and solar layers (corona, transition region, photosphere). This leads to complex signal characteristics and dynamics such as:
 
 - Quasi-cyclic behavior with low-amplitude fluctuations,
-- Continuously shifting baselines,
-- Nonlinear and chaotic evolution,
-- High spatial heterogeneity,
-- Both short-duration and long-duration transient events.
+- Continuously evolving baselines due to solar rotation and structural change,
+- Strong nonlinear and sometimes chaotic temporal dynamics,
+- High spatial heterogeneity across active regions and quiet Sun,
+- A wide range of transient phenomena, from short impulsive bursts to long-duration flares.
 
 These properties make solar video data well-suited for benchmarking **unsupervised, generalizable anomaly detection** systems in both space and time.
 
-To demonstrate the capabilities of this repository, we analyze data from the **“Mother’s Day Solar Storms”** in **May 2024**. As reported by [Mara Johnson-Groh (NASA, 2024)](https://science.nasa.gov/science-research/heliophysics/how-nasa-tracked-the-most-intense-solar-storm-in-decades/):
+To demonstrate the capabilities of this repository, I analyzed data from the **“Mother’s Day Solar Storms”** in **May 2024**. As reported by [Mara Johnson-Groh (NASA, 2024)](https://science.nasa.gov/science-research/heliophysics/how-nasa-tracked-the-most-intense-solar-storm-in-decades/):
 
 > “During the first full week of May, a barrage of large solar flares and coronal mass ejections (CMEs) launched clouds of charged particles and magnetic fields toward Earth, creating the strongest solar storm to reach Earth in two decades — and possibly one of the strongest displays of auroras on record in the past 500 years.”
 
-For evaluation, we used AIA **171 Å** data from **00:00 UTC May 10 to 00:00 UTC May 12, 2024**, sampled at **1-minute cadence**. These dates include a sequence of large flares and CMEs described in NASA’s coverage for [May 10](https://science.nasa.gov/blogs/solar-cycle-25/2024/05/10/strong-solar-flare-erupts-from-sun-16/) and [May 11](https://science.nasa.gov/blogs/solar-cycle-25/2024/05/11/sun-releases-2-strong-flares-2/).
+For evaluation, I used AIA **171 Å** data from **00:00 UTC May 10 to 00:00 UTC May 12, 2024**, sampled at **1-minute cadence**. These dates include a sequence of large flares and CMEs described in NASA’s coverage for [May 10](https://science.nasa.gov/blogs/solar-cycle-25/2024/05/10/strong-solar-flare-erupts-from-sun-16/) and [May 11](https://science.nasa.gov/blogs/solar-cycle-25/2024/05/11/sun-releases-2-strong-flares-2/).
 
 The imagery was acquired using the [SunPy](https://sunpy.org) Python library and the [Virtual Solar Observatory (VSO)](https://sdac.virtualsolar.org/cgi/search). All data were resized to **112×112 pixels** due to GPU constraints, as specified in `config.yaml`.
 
@@ -78,7 +78,7 @@ The dataset used during development is **not included** (task-specific/proprieta
 - Includes built-in resizing (default: 112×112 px)  
 - Can be easily adapted to other domains (e.g., surveillance, autonomous vehicles)  
 
-To replicate results using solar data, we recommend:
+To replicate results using solar data, I recommend:
 
 - Using [SunPy](https://sunpy.org) to access AIA/SDO imagery via VSO  
 - Selecting **quiet solar days** for training  
@@ -131,7 +131,21 @@ if __name__ == "__main__":
 
 ## Requirements
 
-A full requirements file is provided but the lightweight summary is:
+A full requirements file of the environment used during construction is provided but the lightweight summary is:
+
+- Python 3.11
+- PyTorch (>=2.0)
+- torchvision
+- numpy
+- matplotlib
+- opencv-python
+- sunpy
+- astropy
+- scipy
+- pandas
+- PyYAML
+- tqdm
+- tensorboard
 
 ## Acknowledgments
 
@@ -141,5 +155,10 @@ A big thank you to:
 - The [SunPy Project](https://sunpy.org) for open-source solar data analysis tools, including support for querying and downloading data via VSO, and structured solar metadata (Fido, Time, Instrument, etc.).
 - [NASA/Solar Data Analysis Center (SDAC)](https://umbra.nascom.nasa.gov/index.html/virtual ) and the [VSO](https://sdac.virtualsolar.org/cgi/search) teams for hosting and maintaining distributed solar data repositories accessible through the VSO API.
 
-## References and Recommended Reading
+## Recommended Reading
 
+Below are some key papers I'm fond of in the realm of anomaly detection:
+
+- [Detecting Spatiotemporal Irregularities in Videos via a 3D Conv AE (2019)](http://dx.doi.org/10.1016/j.jvcir.2019.102747)
+- [ASTNet: Attention Residual Autoencoder for Video Anomaly Detection (2022)](https://link.springer.com/article/10.1007/s10489-022-03613-1) or the [GitHub_Repo](https://github.com/vt-le/astnet?tab=readme-ov-file#readme)
+- [SMAMS: Spatiotemporal Masked Autoencoder with Multi-Memory (2024)](https://doi.org/10.3390/electronics13020353)
