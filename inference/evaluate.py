@@ -235,10 +235,10 @@ def evaluate_model(args):
 
             # Compute heatmap stats
             stats = {
-                "frame": t,
-                "mean": heat.mean(),
-                "max": heat.max(),
-                "std": heat.std(),
+                "Frame": t,
+                "Mean": heat.mean(),
+                "Max": heat.max(),
+                "Std": heat.std(),
             }
 
             # Convert all to PIL and upscale
