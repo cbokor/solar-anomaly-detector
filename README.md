@@ -57,7 +57,7 @@ The `demo/` folder includes two videos showcasing anomaly detection results usin
 **Legend:**  
 > **Red Boxes** = low-level anomalies (2% ≤ reconstruction loss < 8%)  
 > **Light Blue Boxes** = high-level anomalies (reconstruction loss ≥ 8%)  
-> **Top left Number of Boundary Boxes** = live reconstruction loss (0->1, i.e., 0.08 = 8%)
+> **Top left Number of Boundary Boxes** = live reconstruction loss (0->1, i.e., 0.08 = 8%) 
 > **Global Stats** = the mean, max and standard deviation reconstruction loss values for the entire frame
 
 These thresholds are defined in `config.yaml` as `threshold_low` and `threshold_high`. Training was done with the provided example [`config.yaml`](config.yaml).
@@ -69,6 +69,8 @@ These thresholds are defined in `config.yaml` as `threshold_low` and `threshold_
   Left panel colourscale shifted to focus on intense solar events (e.g., major flares); right panel again shows the same residual heatmap and anomaly bounding boxes.
 
 All major activity was successfully captured using a **moderately deep 3D autoencoder** (13 parameterized layers, no skip connections, wide early layers). While training is GPU-intensive, the final model is suitable for **inference in embedded systems** after post-processing (e.g., quantization, pruning).
+
+---
 
 ## Training Data
 
@@ -128,6 +130,7 @@ if __name__ == "__main__":
 
     main()
 ```
+---
 
 ## Requirements
 
@@ -154,6 +157,13 @@ A big thank you to:
 - The [PyTorch](https://pytorch.org/) community for the core deep learning enviroment.
 - The [SunPy Project](https://sunpy.org) for open-source solar data analysis tools, including support for querying and downloading data via VSO, and structured solar metadata (Fido, Time, Instrument, etc.).
 - [NASA/Solar Data Analysis Center (SDAC)](https://umbra.nascom.nasa.gov/index.html/virtual ) and the [VSO](https://sdac.virtualsolar.org/cgi/search) teams for hosting and maintaining distributed solar data repositories accessible through the VSO API.
+
+## License & Citation
+
+This project is licensed under the [MIT License](./LICENSE).
+
+You are free to use, modify, and distribute this code.  
+If you find it useful in your work, please consider citing it using the metadata in [`CITATION.cff`](./CITATION.cff).
 
 ## Recommended Reading
 

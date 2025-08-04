@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the following metadata:"
+title: "3D Convolutional Autoencoder for Anomaly Detection in Solar Data"
+version: 1.0.0
+date-released: 2025-08-04
+repository-code: https://github.com/cbokor/solar-anomaly-detector
+authors:
+  - family-names: Bokor 
+    given-names: Charles
+    email: charlesBokor@outlook.com
+license: MIT
+keywords:
+  - anomaly detection
+  - 3D convolution
+  - autoencoder
+  - solar physics
+  - spatiotemporal data
