@@ -14,10 +14,6 @@ from datetime import datetime
 
 # %% Methods (data agnostic)
 
-# Notes for development:
-# - print & tqdm.write commands currently placeholders for creating a logger
-# - change dir for temp files to be the location of the raw data, that way not taking room in repo processed folder
-
 
 def fname_to_datetime(fname):
     """

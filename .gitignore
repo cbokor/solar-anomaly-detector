@@ -1,5 +1,6 @@
 **/__pycache__/
 *.py[cod]
 *.pth.tar
+*.pth.fits
 data/processed/
 runs/

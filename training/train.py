@@ -1,22 +1,3 @@
-# %% Goal
-"""
-### Baseline Architecture Notes (DEL later): 3D Conv Autoencoder
-
-+ Assume individual clips currently stored as (C, T, H, W) tensors
-+ next need to convert to (B, C, T, H, W) tensors in a dataloader
-
-+ Input: (B, C, T, H, W)
--> Conv3D layers
--> ReLU + MaxPool3D
--> Latent Space
--> ConvTranspose3D layers
--> ReLU + Sigmoid
-+ Output: Reconstructed clip (B, C, T, H, W)
-
-- **Loss Function**: MSE (or SSIM later)
-
-"""
-
 # %% Import
 
 import os
