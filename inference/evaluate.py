@@ -39,6 +39,10 @@ def evaluate_model(args):
 
     Raises:
         - ValueError: If no recognizable eval mode provided.
+
+    Notes:
+        - The video to be evaluated must be a torch tensor whose frames are the same size as the model was trained on.
+        The prep mode (prepare_data.py) has a movie only setting to achieve this assuming .tar or .fits files.
     """
 
     # Initialize file paths
