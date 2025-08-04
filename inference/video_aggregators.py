@@ -158,7 +158,7 @@ def sum_agg(recons, heatmaps, stride, clip_len, T, H, W):
     return final_heat, final_recon
 
 
-def percentile_agg(recons, heatmaps, stride, clip_len, T, H, W, percentile=90):
+def percentile_agg(recons, heatmaps, stride, clip_len, T, H, W, percentile=99):
     """
     Aggregates overlapping frame-wise heatmaps and reconstructions using percentile-based aggregation.
     Felxable filtering, reduce outlier impact, highlight consistant strong signals.
