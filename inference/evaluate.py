@@ -12,7 +12,6 @@ from inference.video_aggregators import percentile_agg
 from tqdm import tqdm
 from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import label, find_objects
-from training.loss_functions import LOSS_REGISTRY
 
 # %% Methods
 
@@ -55,11 +54,13 @@ def evaluate_model(args):
     # Read evaluation settings
     clip_len = config["data_pre_processing"]["clip_length"]
     stride = config["evaluate"]["stride"]
-    threshold = config["evaluate"]["threshold"]
+    threshold_low = config["evaluate"]["threshold_low"]
+    threshold_high = config["evaluate"]["threshold_high"]
     min_area = config["evaluate"]["min_area"]
     weight = config["evaluate"]["heat_weight"]
     scale_factor = config["evaluate"]["scale_factor"]
     fps = config["evaluate"]["fps"]
+    iou_thresh = config["evaluate"]["iou_thresh"]
     device = args.device
 
     # Initialize model
@@ -148,7 +149,14 @@ def evaluate_model(args):
 
             elif args.eval_mode == "boxes":
                 anomaly_pil = overlay_heatmap_with_boxes(
-                    frame, heat, threshold, min_area, weight, scale_factor
+                    frame,
+                    heat,
+                    threshold_low,
+                    threshold_high,
+                    min_area,
+                    weight,
+                    scale_factor,
+                    iou_thresh,
                 )
             else:
                 raise ValueError(f"Unknown eval mode: {args.eval_mode}")
@@ -209,7 +217,14 @@ def evaluate_model(args):
                 anomaly_pil = overlay_heatmap(frame, heat, weight, scale_factor)
             elif args.eval_mode == "boxes":
                 anomaly_pil = overlay_heatmap_with_boxes(
-                    frame, heat, threshold, min_area, weight, scale_factor
+                    frame,
+                    heat,
+                    threshold_low,
+                    threshold_high,
+                    min_area,
+                    weight,
+                    scale_factor,
+                    iou_thresh,
                 )
             else:
                 raise ValueError(f"Unknown eval mode: {args.eval_mode}")
@@ -225,7 +240,6 @@ def evaluate_model(args):
             # Convert all to PIL and upscale
             frame_pil = upscale_image(Image.fromarray(frame_rgb))
             recon_pil = upscale_image(Image.fromarray(recon_rgb))
-            anomaly_pil = upscale_image(anomaly_pil)
 
             # Annotate frames
             frame_pil = annotate_frame(frame_pil, "data")
@@ -296,7 +310,14 @@ def overlay_heatmap(frame_grey, heat_map, weight, scale_factor):
 
 
 def overlay_heatmap_with_boxes(
-    frame_grey, heat_map, threshold, min_area, weight, scale_factor
+    frame_grey,
+    heat_map,
+    threshold_low,
+    threshold_high,
+    min_area,
+    weight,
+    scale_factor,
+    iou_thresh,
 ):
     """
     Overlay anomaly heatmap and draw bounding boxes on top of a grayscale frame.
@@ -311,10 +332,12 @@ def overlay_heatmap_with_boxes(
     Args:
         frame_grey (np.ndarray): Grayscale image, shape (H, W), dtype float.
         heat_map (np.ndarray): Heatmap of anomaly scores, shape (H, W), in [0,1].
-        threshold (float): Pixel-level threshold to create binary anomaly mask (post-normalization).
+        threshold_low (float): Pixel-level threshold to create binary anomaly mask (post-normalization).
+        threshold_high (float): Region_level threshold to color code anomaly boundry boxes as 'high-level'.
         min_area (int): Minimum pixel area to consider a region anomalous (pre-scale).
         weight (float): Blend weight between original frame and heatmap [0,1].
         scale_factor (float): Upscaling factor applied before drawing boxes.
+        iou_thresh (float): intersection over union threshold for anomaly box deletion.
 
     Returns:
         PIL.Image: RGB image with heatmap overlay and bounding boxes.
@@ -328,7 +351,7 @@ def overlay_heatmap_with_boxes(
     frame_rgb = to_rgb(frame_grey_up)  # (H,W)->(H,W,3)
 
     # Create binary anomaly mask using threshold, (H,W)
-    mask = (heat_map_up > threshold).astype(np.uint8)
+    mask = (heat_map_up > threshold_low).astype(np.uint8)
 
     # Label connected components in the binary mask (background = 0), (H, W)
     labeled_mask, num_labels = label(mask)
@@ -374,7 +397,6 @@ def overlay_heatmap_with_boxes(
     # Sort boxes in descending area to prioritize larger areas
     boxes = sorted(boxes, key=lambda b: b[4], reverse=True)
 
-    iou_thresh = 0.2
     kept_boxes = []
 
     # Apply Non maximum suppresion, I.e.,
@@ -400,8 +422,8 @@ def overlay_heatmap_with_boxes(
     scored_boxes = sorted(scored_boxes, key=lambda b: b[4], reverse=True)
 
     # Set up colors: red for others, green/orange/yellow for top 3
-    high_color = (0, 255, 255)  # 2.5x higher than threshold: green
-    default_color = (255, 0, 0)  # normal: red
+    high_color = (0, 255, 255)  # higher than threshold_high: light blue
+    default_color = (255, 0, 0)  # normal: red (i.e., higher than threshold_low)
 
     # Optional font setup
     font_size = 8
@@ -414,13 +436,13 @@ def overlay_heatmap_with_boxes(
 
     for i, box in enumerate(scored_boxes):
         x1, y1, x2, y2, score = box
-        color = high_color if box[4] > (4 * threshold) else default_color
+        color = high_color if box[4] > threshold_high else default_color
 
         # Draw box
         draw.rectangle([x1, y1, x2, y2], outline=color, width=2)
 
         # Draw score text just above box
-        color2 = high_color if box[4] > (4 * threshold) else (255, 255, 255)
+        color2 = high_color if box[4] > threshold_high else (255, 255, 255)
         text = f"{score:.2f}"
         draw.text((x1 + 2, y1 - font_size - 2 - 1), text, fill=color2, font=font2)
 
