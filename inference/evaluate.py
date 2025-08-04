@@ -12,6 +12,7 @@ from inference.video_aggregators import percentile_agg
 from tqdm import tqdm
 from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import label, find_objects
+from training.loss_functions import LOSS_REGISTRY
 
 # %% Methods
 
@@ -97,7 +98,9 @@ def evaluate_model(args):
         ):
             recon = model(input_clip)
 
+        # Generate error maps for each frame in clip
         error = torch.abs(recon - input_clip).squeeze(0).squeeze(0)  # shape (T, H, W)
+
         recons.append(recon.squeeze(0).squeeze(0).cpu())
         heatmaps.append(error.cpu())
 
@@ -123,9 +126,10 @@ def evaluate_model(args):
 
             frame = video_np[t]
             heat = heat_np[t]
+            recon = recon_np[t]
 
             # Normalization per frame based on data, not recon
-            frame = percent_norm(frame)
+            frame, recon = percent_norm(frame, recon)
 
             # Apply colour maps
             cmap = cm.get_cmap(
@@ -154,10 +158,10 @@ def evaluate_model(args):
 
             # Compute heatmap stats
             stats = {
-                "frame": t,
-                "mean": heat.mean(),
-                "max": heat.max(),
-                "std": heat.std(),
+                "Frame": t,
+                "Mean": heat.mean(),
+                "Max": heat.max(),
+                "Std": heat.std(),
             }
 
             # Annotate frames
@@ -316,9 +320,6 @@ def overlay_heatmap_with_boxes(
         PIL.Image: RGB image with heatmap overlay and bounding boxes.
     """
 
-    # Normalize heatmap for better visual contrast
-    heat_map = percent_norm(heat_map)
-
     # Upscale input arrays for higher-resolution visualization
     frame_grey_up = upscale_array(frame_grey)
     heat_map_up = upscale_array(heat_map)
@@ -331,6 +332,10 @@ def overlay_heatmap_with_boxes(
 
     # Label connected components in the binary mask (background = 0), (H, W)
     labeled_mask, num_labels = label(mask)
+
+    # Normalize heatmap for better visual contrast (specifically AFTER anomaly mask in original scale)
+    heat_map_error_scale = heat_map_up
+    heat_map_up = percent_norm(heat_map_up)
 
     # Apply colormap to heatmap and remove alpha channel
     cmap = cm.get_cmap("jet")
@@ -369,7 +374,7 @@ def overlay_heatmap_with_boxes(
     # Sort boxes in descending area to prioritize larger areas
     boxes = sorted(boxes, key=lambda b: b[4], reverse=True)
 
-    iou_thresh = 0.3
+    iou_thresh = 0.2
     kept_boxes = []
 
     # Apply Non maximum suppresion, I.e.,
@@ -383,15 +388,46 @@ def overlay_heatmap_with_boxes(
         if keep:
             kept_boxes.append(candidate)
 
-    # Draw retained boxes on image
+    # Calculate anomaly score for each box (i.e., mean heatmap value inside the box)
+    scored_boxes = []
     for box in kept_boxes:
-        x1, y1, x2, y2, _ = box
-        draw.rectangle([x1, y1, x2, y2], outline=(255, 0, 0), width=2)
+        x1, y1, x2, y2, area = box
+        patch = heat_map_error_scale[y1:y2, x1:x2]
+        score = float(np.max(patch))
+        scored_boxes.append([x1, y1, x2, y2, score])
+
+    # Sort by score descending
+    scored_boxes = sorted(scored_boxes, key=lambda b: b[4], reverse=True)
+
+    # Set up colors: red for others, green/orange/yellow for top 3
+    high_color = (0, 255, 255)  # 2.5x higher than threshold: green
+    default_color = (255, 0, 0)  # normal: red
+
+    # Optional font setup
+    font_size = 8
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+        font2 = ImageFont.truetype("arial.ttf", font_size + 2)
+    except:
+        font = ImageFont.load_default()
+        font2 = ImageFont.load_default()
+
+    for i, box in enumerate(scored_boxes):
+        x1, y1, x2, y2, score = box
+        color = high_color if box[4] > (4 * threshold) else default_color
+
+        # Draw box
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=2)
+
+        # Draw score text just above box
+        color2 = high_color if box[4] > (4 * threshold) else (255, 255, 255)
+        text = f"{score:.2f}"
+        draw.text((x1 + 2, y1 - font_size - 2 - 1), text, fill=color2, font=font2)
 
     return blended_img
 
 
-def annotate_frame(frame, type, font_size=14, stats=None):
+def annotate_frame(frame, type, font_size=12, stats=None):
     """
     Annotate a given PIL image with a label and optional per-frame statistics.
 
@@ -419,24 +455,48 @@ def annotate_frame(frame, type, font_size=14, stats=None):
         font = ImageFont.load_default()
 
     # Starting position for text
+    width, height = frame.size
     label_color = (255, 50, 50)
     x, y = 5, 5
 
-    # Draw the frame label based on the type
+    # text_width, _ = draw.textsize(url_text, font=font)
+
+    # Draw the frame label based on the type with underline
     if type == "data":
-        draw.text((x, y), f"Data", fill=label_color, font=font)
+        title = f"Data"
+        draw.text(
+            (x, height - font_size - 5),
+            "github.com/cbokor",
+            fill=label_color,
+            font=font,
+        )
     elif type == "recon":
-        draw.text((x, y), f"Reconstruction", fill=label_color, font=font)
+        title = f"Reconstruction"
     elif type == "anomaly":
-        draw.text((x, y), f"Anomaly Model", fill=label_color, font=font)
+        title = f"Anomaly Model"
     else:
         raise TypeError("Provided frame type not recognised for annotation")
 
+    bbox = draw.textbbox((x, y), title, font=font)
+    text_width = bbox[2] - bbox[0]
+    # text_height = bbox[3] - bbox[1]
+    draw.text((x, y), title, fill=label_color, font=font)
+    underline_y = y + font_size + 2
+    draw.line((x, underline_y, x + text_width, underline_y), fill=label_color, width=1)
+
     # Optionally draw statistics below the label
     if stats:
+        title = "Global Stats:"
+        bbox = draw.textbbox((x, y), title, font=font)
+        text_width = bbox[2] - bbox[0]
+        x = width - text_width - 5
+        draw.text((x, y), title, fill=label_color, font=font)
         for key, value in stats.items():
             y += font_size + 2
-            draw.text((x, y), f"{key}: {value:.3f}", fill=label_color, font=font)
+            if key == "Frame":
+                draw.text((x, y), f"{key}: {value:.0f}", fill=label_color, font=font)
+            else:
+                draw.text((x, y), f"{key}: {value:.3f}", fill=label_color, font=font)
 
     return frame
 
