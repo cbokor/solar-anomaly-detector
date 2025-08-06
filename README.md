@@ -2,7 +2,9 @@
 
 Unsupervised learning for computer vision based anomaly detection via a modular PyTorch pipeline and reconstructive 3D-AE.
 
-**Not much time to read?** [Watch a demo video!](demo/anomaly_video_low_level.mp4)
+**Not much time to read?** See the sample gif below (first 4s) or [watch a full demo video!](demo/anomaly_video_low_level.mp4)
+
+![Demo gif](demo/demo.gif)
 
 ## Key Features
 
