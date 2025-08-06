@@ -9,7 +9,7 @@ Unsupervised learning for computer vision based anomaly detection via a modular 
 ## Key Features
 
 - 📦 Modular PyTorch pipeline (training, preprocessing, evaluation)
-- 🧠 Based on 3D convolutional autoencoder architecture (Mengjia et al., 2020)
+- 🧠 Interchangable architechture, example based on Mengjia et al., (2020) 3D convolutional autoencoder
 - 📸 Applied to NASA SDO solar data — complex, nonlinear spatiotemporal signals
 - 📊 Easily configurable via `config.yaml` and an args parser for reproducible testing and video output
 - 🖥️ Includes demo videos and command-line usage
@@ -57,9 +57,12 @@ The imagery was acquired using the [SunPy](https://sunpy.org) Python library and
 The `demo/` folder includes two videos showcasing anomaly detection results using the 3D convolutional autoencoder based on [Mengjia et al. (2020)](http://dx.doi.org/10.1016/j.jvcir.2019.102747):
 
 **Legend:**  
-> **Red Boxes** = low-level anomalies (2% ≤ reconstruction loss < 8%)  
-> **Light Blue Boxes** = high-level anomalies (reconstruction loss ≥ 8%)  
-> **Top left Number of Boundary Boxes** = live reconstruction loss (0->1, i.e., 0.08 = 8%) 
+> **Red Boxes** = low-level anomalies (2% ≤ reconstruction loss < 8%)
+>
+> **Light Blue Boxes** = high-level anomalies (reconstruction loss ≥ 8%)
+>
+> **Top left Number of Boundary Boxes** = live reconstruction loss (0->1, i.e., 0.08 = 8%)
+>
 > **Global Stats** = the mean, max and standard deviation reconstruction loss values for the entire frame
 
 These thresholds are defined in `config.yaml` as `threshold_low` and `threshold_high`. Training was done with the provided example [`config.yaml`](config.yaml).
