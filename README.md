@@ -9,7 +9,7 @@ Unsupervised learning for computer vision based anomaly detection via a modular 
 ## Key Features
 
 - 📦 Modular PyTorch pipeline (training, preprocessing, evaluation)
-- 🧠 Interchangable architechture, example based on Mengjia et al., (2020) 3D convolutional autoencoder
+- 🧠 Interchangeable architecture, example based on Mengjia et al., (2020) 3D convolutional autoencoder
 - 📸 Applied to NASA SDO solar data — complex, nonlinear spatiotemporal signals
 - 📊 Easily configurable via `config.yaml` and an args parser for reproducible testing and video output
 - 🖥️ Includes demo videos and command-line usage
