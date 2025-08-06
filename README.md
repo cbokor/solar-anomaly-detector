@@ -105,7 +105,7 @@ The repo includes four separate pipeline modes all run from `main.py` that must 
 
 + `"train"` -> full training pipeline using training clips with summary writer logging. Optional tensorboard visual monitoring and prior training checkpoint loading provided. Runs [`train_model()`](training/train.py) from `training/train.py`.
 
-+ `"eval"` -> evaluate a given torch tensor movie via a trained model to output a .mp4 movie. Several optional features are included (e.g., diagnostic or standard output video, boundary box inclusion or just heatmap, etc). Runs [`evaluate_model()`](inference/evaluate) from `inference/evaluate`.
++ `"eval"` -> evaluate a given torch tensor movie via a trained model to output a .mp4 movie. Several optional features are included (e.g., diagnostic or standard output video, boundary box inclusion or just heatmap, etc). Runs [`evaluate_model()`](inference/evaluate.py) from `inference/evaluate`.
 
 For further information on any of the specific features included in these modes please see the thorough documentation for each respectively. 
 
@@ -161,7 +161,7 @@ A big thank you to:
 - The creators of [Detecting Spatiotemporal Irregularities in Videos via a 3D Conv AE (2020)](http://dx.doi.org/10.1016/j.jvcir.2019.102747).
 - The [PyTorch](https://pytorch.org/) community for the core deep learning enviroment.
 - The [SunPy Project](https://sunpy.org) for open-source solar data analysis tools, including support for querying and downloading data via VSO, and structured solar metadata (Fido, Time, Instrument, etc.).
-- [NASA/Solar Data Analysis Center (SDAC)](https://umbra.nascom.nasa.gov/index.html/virtual ) and the [VSO](https://sdac.virtualsolar.org/cgi/search) teams for hosting and maintaining distributed solar data repositories accessible through the VSO API.
+- [NASA/Solar Data Analysis Center (SDAC)](https://umbra.nascom.nasa.gov/index.html/) and the [VSO](https://sdac.virtualsolar.org/cgi/search) teams for hosting and maintaining distributed solar data repositories accessible through the VSO API.
 
 ## License & Citation
 
